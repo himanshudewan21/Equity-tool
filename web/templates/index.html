@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Poker Equity Calculator</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>Poker Equity Calculator</h1>
+      <div class="game-tabs" id="game-tabs"></div>
+    </header>
+
+    <main>
+      <!-- Rankings banner (shown when rankings needed) -->
+      <div id="rankings-banner" class="hidden"></div>
+
+      <!-- Preflop / Postflop sub-tabs -->
+      <div class="sub-tabs" id="sub-tabs"></div>
+
+      <!-- Preflop section -->
+      <section id="preflop-section">
+        <div class="mode-tabs" id="mode-tabs"></div>
+
+        <!-- Hero row -->
+        <div class="player-row" id="hero-row">
+          <div class="player-meta">
+            <span class="player-label hero-label">YOUR HAND</span>
+            <div class="input-mode-toggle" id="hero-input-toggle"></div>
+          </div>
+          <div class="hand-area" id="hero-hand-area"></div>
+        </div>
+
+        <!-- Board row (preflop — hidden until postflop) -->
+        <div class="player-row" id="board-row-preflop" style="display:none">
+          <div class="player-meta">
+            <span class="player-label">BOARD</span>
+          </div>
+          <div class="hand-area" id="board-hand-area"></div>
+        </div>
+
+        <!-- Villain rows container -->
+        <div id="villains-container"></div>
+
+        <!-- Add opponent -->
+        <div class="add-opponent-row">
+          <button id="add-villain-btn" class="add-villain-btn">+ Add Opponent</button>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="action-row">
+          <button id="calculate-btn" class="primary-btn">Calculate Equity</button>
+          <button id="clear-btn" class="secondary-btn">Clear All</button>
+          <span id="calc-status" class="status-text"></span>
+        </div>
+
+        <!-- Results: HvH -->
+        <div id="hvh-results" class="hidden"></div>
+
+        <!-- Results: Equity Distribution -->
+        <div id="dist-results" class="hidden">
+          <div class="summary-stats-row" id="summary-stats"></div>
+          <div class="charts-row">
+            <div class="chart-box">
+              <div class="chart-title">EQUITY CURVE — SORTED BY OPPONENT STRENGTH</div>
+              <canvas id="chart-curve" width="500" height="300"></canvas>
+            </div>
+            <div class="chart-box">
+              <div class="chart-title">HISTOGRAM — EQUITY DISTRIBUTION</div>
+              <canvas id="chart-histogram" width="500" height="300"></canvas>
+            </div>
+          </div>
+          <div class="chart-footnote" id="chart-footnote"></div>
+        </div>
+      </section>
+
+      <!-- Postflop section -->
+      <section id="postflop-section" class="hidden">
+        <!-- Hero row (reused) -->
+        <div class="player-row" id="postflop-hero-row">
+          <div class="player-meta">
+            <span class="player-label hero-label">YOUR HAND</span>
+            <div class="input-mode-toggle" id="pf-hero-input-toggle"></div>
+          </div>
+          <div class="hand-area" id="pf-hero-hand-area"></div>
+        </div>
+
+        <!-- Board -->
+        <div class="player-row" id="postflop-board-row">
+          <div class="player-meta">
+            <span class="player-label">BOARD</span>
+            <div class="board-stage-btns" id="board-stage-btns"></div>
+          </div>
+          <div class="hand-area" id="pf-board-hand-area"></div>
+        </div>
+
+        <!-- Villain rows container (postflop) -->
+        <div id="pf-villains-container"></div>
+
+        <div class="add-opponent-row">
+          <button id="pf-add-villain-btn" class="add-villain-btn">+ Add Opponent</button>
+        </div>
+
+        <div class="action-row">
+          <button id="pf-calculate-btn" class="primary-btn">Analyze</button>
+          <button id="pf-clear-btn" class="secondary-btn">Clear All</button>
+          <span id="pf-calc-status" class="status-text"></span>
+        </div>
+
+        <div id="pf-results" class="hidden">
+          <div class="summary-stats-row" id="pf-summary-stats"></div>
+          <div class="charts-row">
+            <div class="chart-box">
+              <div class="chart-title">EQUITY CURVE — SORTED BY OPPONENT STRENGTH</div>
+              <canvas id="pf-chart-curve" width="500" height="300"></canvas>
+            </div>
+            <div class="chart-box">
+              <div class="chart-title">HISTOGRAM — EQUITY DISTRIBUTION</div>
+              <canvas id="pf-chart-histogram" width="500" height="300"></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Card picker grid (shared) -->
+      <section id="card-picker-section">
+        <div id="card-grid"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Tooltip (shared for hover on charts) -->
+  <div id="chart-tooltip" class="chart-tooltip hidden"></div>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
