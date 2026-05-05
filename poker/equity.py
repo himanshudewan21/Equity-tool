@@ -183,6 +183,41 @@ def _compute_histogram(equities, bucket_width=5):
     return {"buckets": freq, "labels": labels, "bucket_width": bucket_width}
 
 
+def _plo_equity_precomputed(hero, villain_hands, board, game_type, hero_ranks, boards_list):
+    """Compute hero equity using precomputed hero_ranks on shared board samples.
+
+    Filters out boards that conflict with any villain card, then compares ranks.
+    Returns hero equity as a float, or None if no valid boards remain.
+    """
+    villain_card_set = set()
+    for vh in villain_hands:
+        for c in vh:
+            villain_card_set.add(tuple(c))
+
+    wins = ties = total = 0
+    for i, full_board in enumerate(boards_list):
+        # Skip boards conflicting with villain cards.
+        if any(tuple(c) in villain_card_set for c in full_board[len(board):]):
+            continue
+        hero_r = hero_ranks[i]
+        if hero_r is None:
+            continue
+        try:
+            # Only one villain supported in fast path; multi-villain falls back below.
+            vill_r = best_hand(villain_hands[0], full_board, game_type)
+        except Exception:
+            continue
+        if hero_r > vill_r:
+            wins += 1
+        elif hero_r == vill_r:
+            ties += 1
+        total += 1
+
+    if total == 0:
+        return None
+    return (wins + ties / 2) / total
+
+
 def calculate_equity_vs_ranges_multiway(
     hero,
     villain_combos_list,
@@ -203,8 +238,31 @@ def calculate_equity_vs_ranges_multiway(
     """
     board = list(board) if board else []
     hero = list(hero)
-    n_villains = len(villain_combos_list)
     rng = random.Random(seed)
+
+    # PLO flop fast path: precompute hero ranks on a shared set of board samples
+    # so hero is evaluated once instead of once per curve point.
+    use_plo_fast = (game_type != "nlhe" and len(board) == 3
+                    and len(villain_combos_list) == 1)
+    precomputed_boards = None
+    hero_ranks = None
+    if use_plo_fast:
+        n_boards = min(samples_per_point, 150)
+        stub = remaining_deck(hero + board)
+        hole_count = HOLE_COUNTS[game_type]
+        precomputed_boards = []
+        for _ in range(n_boards):
+            try:
+                extra = rng.sample(stub, 2)  # turn + river
+                precomputed_boards.append(board + extra)
+            except ValueError:
+                break
+        hero_ranks = []
+        for fb in precomputed_boards:
+            try:
+                hero_ranks.append(best_hand(hero, fb, game_type))
+            except Exception:
+                hero_ranks.append(None)
 
     equities = []
     curve = []
@@ -224,15 +282,32 @@ def calculate_equity_vs_ranges_multiway(
         if not villain_hands:
             continue
 
-        # Compute multi-way equity at this point.
+        # Equity calculation — three paths:
+        # 1. PLO flop, single villain: use precomputed hero boards (fastest)
+        # 2. NLHE or PLO turn/river: exact enumeration (fast exact evaluator / few boards)
+        # 3. PLO flop, multi-villain: MC per point
         try:
-            res = calculate_equity_multiway_mc(
-                hero, villain_hands, board, game_type,
-                samples=samples_per_point, seed=rng.randint(0, 2**31),
-            )
-            eq = res["hero"]["equity"]
+            if use_plo_fast and precomputed_boards:
+                eq = _plo_equity_precomputed(
+                    hero, villain_hands, board, game_type,
+                    hero_ranks, precomputed_boards,
+                )
+                if eq is None:
+                    continue
+            elif game_type != "nlhe" and len(board) == 3:
+                res = calculate_equity_multiway_mc(
+                    hero, villain_hands, board, game_type,
+                    samples=min(samples_per_point, 150),
+                    seed=rng.randint(0, 2**31),
+                )
+                eq = res["hero"]["equity"]
+            else:
+                res = calculate_equity_multiway(
+                    hero, villain_hands, board, game_type,
+                    mode="auto", samples=samples_per_point,
+                )
+                eq = res["hero"]["equity"]
         except (ValueError, CardError):
-            # Skip this point if cards conflict (e.g. combo overlaps board).
             continue
 
         equities.append(eq)

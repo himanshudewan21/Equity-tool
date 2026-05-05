@@ -189,7 +189,7 @@ def _generate_rankings_nlhe(rng: random.Random, samples: int) -> None:
 
 def _generate_rankings_plo(game_type: str, hole_count: int,
                             rng: random.Random, samples: int,
-                            n_sample: int = 50_000) -> None:
+                            n_sample: int = 2_000) -> None:
     deck = full_deck()
     seen: set = set()
     sample_hands = []

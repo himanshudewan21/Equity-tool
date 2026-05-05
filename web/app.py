@@ -1,3 +1,4 @@
+import hashlib
 import time
 
 from flask import Flask, jsonify, render_template, request
@@ -240,6 +241,10 @@ def range_equity():
                 return _bad(f"Villain {i+1}: no valid combos remain after blocker removal")
             villain_combos_list.append(combos)
 
+    # Deterministic seed derived from hero + board cards so same inputs → same results.
+    seed_str = "".join(sorted(card_str(c) for c in hero)) + "".join(sorted(card_str(c) for c in board))
+    seed = int(hashlib.md5(seed_str.encode()).hexdigest(), 16) % (2 ** 31)
+
     t0 = time.time()
     try:
         result = calculate_equity_vs_ranges_multiway(
@@ -249,6 +254,7 @@ def range_equity():
             game_type,
             samples_per_point=samples_per_point,
             curve_points=curve_points,
+            seed=seed,
         )
     except ValueError as e:
         return _bad(str(e))

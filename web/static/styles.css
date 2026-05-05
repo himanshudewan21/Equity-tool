@@ -1,31 +1,22 @@
 /* ============================================================
-   Base reset & layout
+   Reset & Variables
    ============================================================ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:          #0a1f10;
-  --bg-panel:    #0f2d18;
-  --bg-card:     #152e1c;
-  --bg-input:    #1a3822;
-  --border:      #2a5038;
+  --bg:          #0d2416;
+  --bg-panel:    #122d1c;
+  --bg-row:      #163522;
+  --bg-input:    #1a3e28;
+  --border:      #274d38;
   --accent:      #ffd166;
   --accent-dim:  #c9a03a;
   --text:        #e8f5ed;
-  --text-muted:  #7aad8a;
+  --text-muted:  #6a9a7a;
   --text-label:  #a0c8ae;
   --red:         #e05252;
   --blue:        #5b9ee0;
-  --green-tab:   #1e4d2b;
-  --tab-active:  #ffd166;
-  --tab-text-active: #0a1f10;
-  --card-slot-empty: #1a3822;
-  --card-slot-border: #2a5038;
-  --card-filled: #f5f5f5;
-  --suit-s:      #e8f5ed;
-  --suit-h:      #e85252;
-  --suit-d:      #e85252;
-  --suit-c:      #e8f5ed;
+  --villain-col: #d48030;
 }
 
 body {
@@ -33,8 +24,10 @@ body {
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
-  padding: 0 0 60px;
+  padding-bottom: 80px;
 }
+
+.hidden { display: none !important; }
 
 /* ============================================================
    Header
@@ -42,30 +35,30 @@ body {
 header {
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border);
-  padding: 16px 32px;
+  padding: 14px 32px;
   display: flex;
   align-items: center;
   gap: 32px;
 }
 
 header h1 {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   color: var(--accent);
-  letter-spacing: 0.5px;
+  letter-spacing: 0.4px;
   white-space: nowrap;
 }
 
 /* ============================================================
-   Tabs: game / sub / mode
+   Game tabs (header)
    ============================================================ */
-.tab-row {
+#game-tabs {
   display: flex;
   gap: 4px;
 }
 
 .tab-btn {
-  padding: 6px 18px;
+  padding: 6px 20px;
   border-radius: 20px;
   border: 1px solid var(--border);
   background: transparent;
@@ -73,28 +66,13 @@ header h1 {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  letter-spacing: 0.4px;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 .tab-btn:hover { background: var(--bg-input); color: var(--text); }
 .tab-btn.active {
   background: var(--accent);
-  color: var(--tab-text-active);
+  color: #0d1a08;
   border-color: var(--accent);
-}
-
-.game-tabs { flex: 1; }
-
-/* Sub-tabs row below header */
-.sub-tabs-row {
-  padding: 12px 32px 0;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-panel);
-}
-
-/* Mode tabs (HvH / Equity Dist) inside main */
-.mode-tabs-row {
-  padding: 12px 0 0;
 }
 
 /* ============================================================
@@ -102,7 +80,7 @@ header h1 {
    ============================================================ */
 #rankings-banner {
   padding: 10px 32px;
-  background: #1a2e10;
+  background: #162a10;
   border-bottom: 1px solid var(--border);
   font-size: 13px;
   color: var(--text-muted);
@@ -111,9 +89,9 @@ header h1 {
   gap: 12px;
 }
 #rankings-banner.hidden { display: none; }
-#rankings-banner .banner-btn {
+.banner-btn {
   background: var(--accent);
-  color: var(--tab-text-active);
+  color: #0d1a08;
   border: none;
   padding: 4px 14px;
   border-radius: 12px;
@@ -121,260 +99,294 @@ header h1 {
   font-weight: 700;
   cursor: pointer;
 }
-#rankings-banner .spinner {
-  width: 14px; height: 14px;
-  border: 2px solid var(--text-muted);
+.spinner {
+  width: 13px; height: 13px;
+  border: 2px solid var(--border);
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   display: inline-block;
+  flex-shrink: 0;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ============================================================
+   Sub-tabs (Preflop / Postflop)
+   ============================================================ */
+#sub-tabs {
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 32px 0;
+  display: flex;
+  gap: 4px;
+}
 
 /* ============================================================
    Main layout
    ============================================================ */
 main {
-  max-width: 1040px;
+  max-width: 1020px;
   margin: 0 auto;
-  padding: 24px 32px;
+  padding: 20px 32px;
 }
 
-.hidden { display: none !important; }
+/* ============================================================
+   Mode tabs (HvH / Equity Distribution)
+   ============================================================ */
+#mode-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+}
 
 /* ============================================================
-   Player rows
+   Player rows (panels)
    ============================================================ */
 .player-row {
   display: flex;
-  align-items: flex-start;
-  gap: 20px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--border);
+  align-items: center;
+  gap: 16px;
+  background: var(--bg-row);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 10px;
+  position: relative;
 }
 
-.player-meta {
-  min-width: 160px;
+.row-left {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding-top: 6px;
+  min-width: 130px;
+  flex-shrink: 0;
 }
 
 .player-label {
   font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
   color: var(--text-label);
+  text-transform: uppercase;
 }
-.hero-label { color: var(--accent); }
+.hero-label  { color: var(--accent); }
+.villain-label { color: var(--villain-col); }
 
+/* Specific / Range toggle */
+.type-toggle {
+  display: inline-flex;
+  background: rgba(0,0,0,0.3);
+  border-radius: 20px;
+  padding: 2px;
+  gap: 0;
+}
+.type-toggle .tt-btn {
+  padding: 4px 13px;
+  border-radius: 18px;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.45);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.type-toggle .tt-btn.active {
+  background: rgba(255,255,255,0.18);
+  color: var(--text);
+}
+
+/* ============================================================
+   Hand area (text input + card slots, inline)
+   ============================================================ */
 .hand-area {
   flex: 1;
   display: flex;
   align-items: center;
+  gap: 8px;
   flex-wrap: wrap;
-  gap: 10px;
-  min-height: 60px;
+  min-height: 52px;
 }
 
-/* ============================================================
-   Input mode toggle (Picker / Text)
-   ============================================================ */
-.input-mode-toggle {
-  display: flex;
-  gap: 2px;
-}
-.input-mode-toggle .toggle-btn {
-  padding: 2px 10px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 11px;
-  cursor: pointer;
-}
-.input-mode-toggle .toggle-btn.active {
-  background: var(--bg-input);
+/* Text input */
+.card-text-input {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 8px;
   color: var(--text);
-  border-color: var(--text-muted);
+  font-size: 13px;
+  font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
+  padding: 7px 11px;
+  width: 150px;
+  outline: none;
+  transition: border-color 0.15s;
 }
+.card-text-input:focus { border-color: var(--accent); }
+.card-text-input::placeholder { color: rgba(255,255,255,0.25); }
 
 /* ============================================================
    Card slots
    ============================================================ */
 .card-slot {
-  width: 50px;
+  width: 52px;
   height: 70px;
-  border-radius: 6px;
-  border: 2px dashed var(--card-slot-border);
-  background: var(--card-slot-empty);
+  border-radius: 8px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
-  font-weight: 700;
   cursor: pointer;
-  transition: border-color 0.12s, background 0.12s;
-  user-select: none;
   position: relative;
-  color: transparent;
+  flex-shrink: 0;
 }
-.card-slot:hover { border-color: var(--text-muted); background: #1e3e28; }
-.card-slot.active { border-color: var(--accent); box-shadow: 0 0 0 2px #ffd16640; }
+
+/* Empty slot — dashed "+" */
+.card-slot.empty {
+  border: 2px dashed rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.04);
+  transition: border-color 0.15s, background 0.15s;
+}
+.card-slot.empty:hover {
+  border-color: rgba(255,255,255,0.45);
+  background: rgba(255,255,255,0.08);
+}
+.slot-plus {
+  font-size: 22px;
+  font-weight: 300;
+  color: rgba(255,255,255,0.3);
+  line-height: 1;
+  pointer-events: none;
+}
+.card-slot.empty:hover .slot-plus { color: rgba(255,255,255,0.65); }
+
+/* Filled slot — white card */
 .card-slot.filled {
-  border-style: solid;
-  border-color: var(--border);
-  background: #f0ede4;
+  background: #f5f2e8;
+  border: none;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.45);
+  cursor: default;
+}
+.cs-rank {
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1;
   color: #111;
 }
-.card-slot.filled.suit-h, .card-slot.filled.suit-d { color: #cc1616; }
-.card-slot.filled.suit-s, .card-slot.filled.suit-c { color: #111; }
-.card-slot .remove-card {
+.cs-suit {
+  font-size: 15px;
+  line-height: 1;
+  margin-top: 1px;
+  color: #111;
+}
+.card-slot.filled.suit-h .cs-rank,
+.card-slot.filled.suit-h .cs-suit,
+.card-slot.filled.suit-d .cs-rank,
+.card-slot.filled.suit-d .cs-suit { color: #c01212; }
+
+/* Remove button on filled card */
+.remove-card {
   position: absolute;
   top: -7px; right: -7px;
-  width: 16px; height: 16px;
-  background: var(--red);
+  width: 18px; height: 18px;
+  background: #d03030;
   color: #fff;
   border-radius: 50%;
-  border: none;
+  border: 2px solid var(--bg-row);
   font-size: 11px;
-  line-height: 16px;
+  line-height: 14px;
   text-align: center;
   cursor: pointer;
   display: none;
+  padding: 0;
 }
 .card-slot.filled:hover .remove-card { display: block; }
 
-/* Board slots have a slightly different look */
+/* ============================================================
+   Remove villain button
+   ============================================================ */
+.remove-villain-btn {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(200,50,50,0.18);
+  color: #e06060;
+  font-size: 16px;
+  line-height: 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.remove-villain-btn:hover { background: rgba(200,50,50,0.45); color: #fff; }
+
+/* ============================================================
+   Range compact controls
+   ============================================================ */
+.range-compact {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.range-display {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 80px;
+}
+.range-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.range-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: default;
+}
+.range-num {
+  width: 50px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  padding: 4px 6px;
+  text-align: center;
+  outline: none;
+}
+.range-num:focus { border-color: var(--accent); }
+
+/* ============================================================
+   Board slots
+   ============================================================ */
 .board-slot-group {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 .board-stage-label {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   letter-spacing: 1px;
   color: var(--text-muted);
   writing-mode: vertical-lr;
   transform: rotate(180deg);
 }
-.board-slots {
-  display: flex;
-  gap: 6px;
-}
+.board-slots { display: flex; gap: 6px; }
 
-/* Text input mode */
-.text-input-wrap {
+/* Board stage toggle */
+#board-stage-btns {
   display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.card-text-input {
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  font-size: 14px;
-  font-family: "SF Mono", "Fira Code", monospace;
-  padding: 6px 12px;
-  width: 180px;
-  outline: none;
-}
-.card-text-input:focus { border-color: var(--accent); }
-.card-text-input::placeholder { color: var(--text-muted); }
-.text-input-hint {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-/* ============================================================
-   Villain row specifics
-   ============================================================ */
-.villain-row {
-  position: relative;
-}
-
-.villain-type-toggle {
-  display: flex;
-  gap: 2px;
-  margin-bottom: 4px;
-}
-.villain-type-toggle .toggle-btn {
-  padding: 3px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 11px;
-  cursor: pointer;
-}
-.villain-type-toggle .toggle-btn.active {
-  background: var(--bg-input);
-  color: var(--text);
-  border-color: var(--text-muted);
-}
-
-.remove-villain-btn {
-  position: absolute;
-  right: 0; top: 16px;
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  font-size: 18px;
-  cursor: pointer;
-  line-height: 1;
-  padding: 4px;
-}
-.remove-villain-btn:hover { color: var(--red); }
-
-/* Range input */
-.range-input-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.range-label {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-.range-value-display {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--accent);
-  min-width: 80px;
-}
-.range-slider-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.range-slider-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.range-slider-row input[type=range] {
-  width: 150px;
-  accent-color: var(--accent);
-}
-.range-pct-input {
-  width: 52px;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text);
-  font-size: 12px;
-  padding: 3px 6px;
-  text-align: center;
-}
-
-/* Board stage buttons */
-.board-stage-btns {
-  display: flex;
-  gap: 4px;
+  gap: 3px;
   margin-top: 4px;
 }
 .stage-btn {
@@ -385,6 +397,7 @@ main {
   color: var(--text-muted);
   font-size: 11px;
   cursor: pointer;
+  transition: background 0.12s, color 0.12s;
 }
 .stage-btn.active {
   background: var(--bg-input);
@@ -393,46 +406,45 @@ main {
 }
 
 /* ============================================================
-   Add opponent row
+   Add opponent / action rows
    ============================================================ */
-.add-opponent-row {
-  padding: 12px 0;
+.add-row {
+  padding: 8px 0 14px;
+  display: flex;
+  justify-content: center;
 }
 .add-villain-btn {
   background: transparent;
   border: 1px dashed var(--border);
   color: var(--text-muted);
-  border-radius: 8px;
-  padding: 7px 20px;
+  border-radius: 20px;
+  padding: 7px 28px;
   font-size: 13px;
   cursor: pointer;
   transition: border-color 0.12s, color 0.12s;
 }
 .add-villain-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-/* ============================================================
-   Action row
-   ============================================================ */
 .action-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px 0;
+  padding: 10px 0 20px;
 }
 
 .primary-btn {
   background: var(--accent);
-  color: var(--tab-text-active);
+  color: #0d1a08;
   border: none;
   border-radius: 8px;
-  padding: 9px 28px;
+  padding: 9px 30px;
   font-size: 14px;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.12s;
 }
 .primary-btn:hover { background: var(--accent-dim); }
-.primary-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.primary-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .secondary-btn {
   background: transparent;
@@ -446,89 +458,96 @@ main {
 }
 .secondary-btn:hover { border-color: var(--text-muted); color: var(--text); }
 
-.status-text {
-  font-size: 13px;
-  color: var(--text-muted);
-}
+.status-text { font-size: 13px; color: var(--text-muted); }
 .status-text.error { color: var(--red); }
 
 /* ============================================================
-   HvH results (hand vs hand)
+   HvH results
    ============================================================ */
-#hvh-results, #pf-results.hvh-mode {
-  padding: 16px 0;
-}
-
 .hvh-players-row {
   display: flex;
-  gap: 16px;
+  gap: 14px;
   flex-wrap: wrap;
+  padding: 4px 0 12px;
 }
-
 .hvh-player-card {
   background: var(--bg-panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 16px 24px;
-  min-width: 180px;
+  min-width: 170px;
   text-align: center;
 }
-.hvh-player-card .player-tag {
-  font-size: 11px;
+.player-tag {
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 1px;
+  letter-spacing: 1.2px;
   color: var(--text-muted);
   margin-bottom: 10px;
 }
-.hvh-player-card .equity-big {
-  font-size: 36px;
+.equity-big {
+  font-size: 38px;
   font-weight: 700;
   color: var(--accent);
   line-height: 1;
   margin-bottom: 10px;
 }
-.hvh-player-card .breakdown {
+.breakdown {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   justify-content: center;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
 }
-.hvh-player-card .breakdown span { text-align: center; }
-.hvh-player-card .breakdown strong { display: block; font-size: 14px; color: var(--text); }
+.breakdown span { text-align: center; }
+.breakdown strong { display: block; font-size: 13px; color: var(--text); margin-bottom: 2px; }
 .hvh-meta {
-  margin-top: 12px;
+  margin-top: 6px;
   font-size: 11px;
   color: var(--text-muted);
 }
 
 /* ============================================================
-   Distribution results
+   Distribution results — summary stats
    ============================================================ */
 .summary-stats-row {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 24px;
+  padding-top: 6px;
 }
+@media (max-width: 720px) { .summary-stats-row { grid-template-columns: 1fr 1fr; } }
+
 .stat-card {
   background: var(--bg-panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px 20px;
-  min-width: 130px;
-  text-align: center;
+  border-radius: 12px;
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-.stat-card .stat-label {
+.stat-card.primary {
+  background: #1c3d28;
+  border-color: #3a6048;
+}
+.stat-label {
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 1px;
+  letter-spacing: 1.5px;
   color: var(--text-muted);
-  margin-bottom: 6px;
+  text-transform: uppercase;
 }
-.stat-card .stat-value {
-  font-size: 26px;
-  font-weight: 700;
+.stat-card.primary .stat-label { color: var(--accent); }
+.stat-value {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1;
+}
+.stat-card.primary .stat-value {
+  font-size: 42px;
   color: var(--accent);
 }
 
@@ -538,25 +557,28 @@ main {
 .charts-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
+  gap: 24px;
 }
-@media (max-width: 760px) {
-  .charts-row { grid-template-columns: 1fr; }
-}
+@media (max-width: 720px) { .charts-row { grid-template-columns: 1fr; } }
 
-.chart-box {
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 16px;
-  position: relative;
+.chart-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 .chart-title {
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 1px;
+  letter-spacing: 1.5px;
   color: var(--text-muted);
-  margin-bottom: 12px;
+  text-align: center;
+  text-transform: uppercase;
+}
+.chart-box {
+  background: #0b1829;
+  border-radius: 14px;
+  overflow: hidden;
+  line-height: 0;
 }
 .chart-box canvas {
   display: block;
@@ -564,111 +586,146 @@ main {
   height: auto !important;
 }
 .chart-footnote {
-  margin-top: 8px;
+  margin-top: 10px;
   font-size: 11px;
   color: var(--text-muted);
   text-align: center;
 }
 
 /* ============================================================
-   Tooltip (chart hover)
+   Chart tooltip
    ============================================================ */
 .chart-tooltip {
   position: fixed;
-  background: #0d2218;
-  border: 1px solid var(--accent);
-  border-radius: 8px;
-  padding: 10px 14px;
-  font-size: 12px;
+  background: #0d1a2e;
+  border: 1px solid #2a3f58;
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 13px;
   color: var(--text);
   pointer-events: none;
   z-index: 9999;
-  min-width: 160px;
-  line-height: 1.7;
+  min-width: 200px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
 }
 .chart-tooltip .tt-title {
   font-weight: 700;
-  color: var(--accent);
-  margin-bottom: 4px;
-  font-size: 11px;
+  color: #c8dce8;
+  margin-bottom: 8px;
+  font-size: 12px;
 }
 .chart-tooltip .tt-row {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  align-items: center;
+  gap: 16px;
+  margin-top: 4px;
+  font-size: 13px;
+  color: #8ab0c8;
 }
-.chart-tooltip .tt-val { color: var(--accent); font-weight: 700; }
+.chart-tooltip .tt-row span:first-child { display: flex; align-items: center; gap: 6px; }
+.chart-tooltip .tt-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.chart-tooltip .tt-val { font-weight: 700; font-size: 14px; }
+.chart-tooltip .tt-red  { color: #e87070; }
+.chart-tooltip .tt-blue { color: #5bc8f0; }
 
 /* ============================================================
-   Card picker grid
+   Card picker modal
    ============================================================ */
-#card-picker-section {
-  margin-top: 24px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 16px;
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.72);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-overlay.hidden { display: none; }
+
+.modal-box {
+  background: #14203a;
+  border-radius: 16px;
+  padding: 24px 22px 20px;
+  width: 500px;
+  max-width: 95vw;
+  max-height: 88vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.7);
 }
 
-#card-grid {
-  display: grid;
-  grid-template-columns: repeat(13, 1fr);
+.modal-header {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--accent);
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.modal-suit-section { margin-bottom: 14px; }
+
+.modal-suit-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-bottom: 7px;
+}
+.modal-suit-label.suit-h,
+.modal-suit-label.suit-d { color: #e05252; }
+.modal-suit-label.suit-s,
+.modal-suit-label.suit-c { color: #d8edd8; }
+
+.modal-suit-cards {
+  display: flex;
+  flex-wrap: wrap;
   gap: 5px;
 }
 
-.pick-card {
-  aspect-ratio: 5 / 7;
-  border-radius: 5px;
-  border: 1px solid var(--border);
-  background: var(--bg-input);
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 700;
+.modal-card-btn {
+  width: 48px;
+  height: 62px;
+  border-radius: 7px;
+  background: #f5f2e8;
+  border: none;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
-  transition: background 0.1s, border-color 0.1s;
-  user-select: none;
-  line-height: 1;
+  gap: 2px;
+  transition: transform 0.1s, box-shadow 0.1s, opacity 0.1s;
+  flex-shrink: 0;
 }
-.pick-card:hover:not(.used):not(.disabled) {
-  background: #2a5038;
-  border-color: var(--text-muted);
+.modal-card-btn:hover:not(.used) {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.4);
 }
-.pick-card .pk-rank { font-size: 13px; }
-.pick-card .pk-suit { font-size: 10px; }
+.modal-card-btn.suit-h,
+.modal-card-btn.suit-d { color: #c01212; }
+.modal-card-btn.suit-s,
+.modal-card-btn.suit-c { color: #111; }
+.mc-rank { font-size: 15px; font-weight: 800; line-height: 1; }
+.mc-suit { font-size: 12px; line-height: 1; }
 
-.pick-card.suit-h, .pick-card.suit-d { color: #e85252; }
-.pick-card.suit-s, .pick-card.suit-c { color: #e8f5ed; }
-
-.pick-card.used {
-  opacity: 0.25;
-  cursor: default;
-}
-.pick-card.disabled {
-  opacity: 0.15;
-  cursor: default;
+.modal-card-btn.used {
+  opacity: 0.22;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
 }
 
-/* ============================================================
-   Misc utilities
-   ============================================================ */
-.section-divider {
-  border: none;
-  border-top: 1px solid var(--border);
-  margin: 20px 0;
+.modal-cancel-btn {
+  display: block;
+  width: 100%;
+  margin-top: 18px;
+  padding: 11px;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 10px;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s;
 }
-
-.loading-dots::after {
-  content: "...";
-  animation: dots 1.2s steps(4, end) infinite;
-}
-@keyframes dots {
-  0%, 20%  { content: ""; }
-  40%      { content: "."; }
-  60%      { content: ".."; }
-  80%,100% { content: "..."; }
-}
+.modal-cancel-btn:hover { background: rgba(255,255,255,0.06); color: var(--text); }
