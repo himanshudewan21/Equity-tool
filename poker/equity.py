@@ -183,28 +183,26 @@ def _compute_histogram(equities, bucket_width=5):
     return {"buckets": freq, "labels": labels, "bucket_width": bucket_width}
 
 
-def _plo_equity_precomputed(hero, villain_hands, board, game_type, hero_ranks, boards_list):
-    """Compute hero equity using precomputed hero_ranks on shared board samples.
+def _equity_precomputed(hero, villain_hand, board, game_type, hero_ranks, boards_list):
+    """Heads-up hero equity using precomputed hero_ranks on a fixed board list.
 
-    Filters out boards that conflict with any villain card, then compares ranks.
+    Skips boards whose runout cards conflict with any villain hole card,
+    then compares the precomputed hero rank to a freshly computed villain rank.
+    Used for NLHE flop (full enumeration) and PLO flop (sampled boards).
     Returns hero equity as a float, or None if no valid boards remain.
     """
-    villain_card_set = set()
-    for vh in villain_hands:
-        for c in vh:
-            villain_card_set.add(tuple(c))
+    villain_card_set = {tuple(c) for c in villain_hand}
 
     wins = ties = total = 0
+    runout_start = len(board)
     for i, full_board in enumerate(boards_list):
-        # Skip boards conflicting with villain cards.
-        if any(tuple(c) in villain_card_set for c in full_board[len(board):]):
+        if any(tuple(c) in villain_card_set for c in full_board[runout_start:]):
             continue
         hero_r = hero_ranks[i]
         if hero_r is None:
             continue
         try:
-            # Only one villain supported in fast path; multi-villain falls back below.
-            vill_r = best_hand(villain_hands[0], full_board, game_type)
+            vill_r = best_hand(villain_hand, full_board, game_type)
         except Exception:
             continue
         if hero_r > vill_r:
@@ -255,27 +253,36 @@ def calculate_equity_vs_ranges_multiway(
         raise ValueError("No villain combos in combined pool")
 
     # Determine which combos to evaluate.
-    # PLO flop: cap at 400 (each combo × 150 boards × 60 PLO evals ≈ 3.6M calls).
+    # PLO flop: cap to keep time reasonable. PLO5 evaluator is ~1.65× slower
+    # than PLO4 per hand, so PLO5 uses tighter caps.
     # NLHE or PLO turn/river: evaluate the full pool (exact enum is fast).
-    if game_type != "nlhe" and len(board) == 3 and len(pool) > 400:
+    if game_type == "plo5" and len(board) == 3 and len(pool) > 200:
+        sample = rng.sample(pool, 200)
+    elif game_type == "plo4" and len(board) == 3 and len(pool) > 400:
         sample = rng.sample(pool, 400)
     else:
         sample = pool
 
-    # PLO flop fast path: precompute hero ranks on shared board samples once.
-    use_plo_fast = (game_type != "nlhe" and len(board) == 3)
+    # Flop fast path: precompute hero ranks on shared boards once and reuse
+    # for every villain combo. NLHE enumerates all 990 turn+river runouts
+    # exactly; PLO samples (PLO5 capped lower because its evaluator is slower).
+    use_fast = len(board) == 3
     precomputed_boards = None
     hero_ranks = None
-    if use_plo_fast:
-        n_boards = min(samples_per_point, 150)
+    if use_fast:
         stub = remaining_deck(hero + board)
-        precomputed_boards = []
-        for _ in range(n_boards):
-            try:
-                extra = rng.sample(stub, 2)
-                precomputed_boards.append(board + extra)
-            except ValueError:
-                break
+        if game_type == "nlhe":
+            precomputed_boards = [board + list(extra) for extra in combinations(stub, 2)]
+        else:
+            board_cap = 100 if game_type == "plo5" else 150
+            n_boards = min(samples_per_point, board_cap)
+            precomputed_boards = []
+            for _ in range(n_boards):
+                try:
+                    extra = rng.sample(stub, 2)
+                    precomputed_boards.append(board + extra)
+                except ValueError:
+                    break
         hero_ranks = []
         for fb in precomputed_boards:
             try:
@@ -287,28 +294,23 @@ def calculate_equity_vs_ranges_multiway(
     equities = []
     for combo in sample:
         try:
-            villain_hands = [parse_cards(list(combo))]
+            villain_hand = parse_cards(list(combo))
         except CardError:
             continue
 
         try:
-            if use_plo_fast and precomputed_boards:
-                eq = _plo_equity_precomputed(
-                    hero, villain_hands, board, game_type,
+            if use_fast and precomputed_boards:
+                eq = _equity_precomputed(
+                    hero, villain_hand, board, game_type,
                     hero_ranks, precomputed_boards,
                 )
                 if eq is None:
                     continue
-            elif game_type != "nlhe" and len(board) == 3:
-                res = calculate_equity_multiway_mc(
-                    hero, villain_hands, board, game_type,
-                    samples=min(samples_per_point, 150),
-                    seed=rng.randint(0, 2**31),
-                )
-                eq = res["hero"]["equity"]
             else:
+                # Turn/river: fall through to the standard auto-dispatch (exact
+                # enumeration is fast since few runouts remain).
                 res = calculate_equity_multiway(
-                    hero, villain_hands, board, game_type,
+                    hero, [villain_hand], board, game_type,
                     mode="auto", samples=samples_per_point,
                 )
                 eq = res["hero"]["equity"]
