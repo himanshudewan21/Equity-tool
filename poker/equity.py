@@ -14,6 +14,23 @@ _MP_THRESHOLD = 100
 _MP_WORKERS = max(1, (os.cpu_count() or 4) - 1)
 
 
+# Range-equity sample counts per precision level and game type. Numbers chosen
+# to keep wall time roughly comparable across games (PLO5 best_of_omaha is
+# ~12× slower per call than NLHE evaluate_7).
+PRECISION_RUNOUTS = {
+    "fast":     {"nlhe": 1000,  "plo4": 1000,  "plo5": 250},
+    "balanced": {"nlhe": 5000,  "plo4": 5000,  "plo5": 1000},
+    "precise":  {"nlhe": 50000, "plo4": 50000, "plo5": 5000},
+}
+DEFAULT_PRECISION = "balanced"
+
+
+def runouts_for(game_type: str, precision: str = DEFAULT_PRECISION) -> int:
+    """Map a precision label to a per-game runout count."""
+    table = PRECISION_RUNOUTS.get(precision) or PRECISION_RUNOUTS[DEFAULT_PRECISION]
+    return table[game_type]
+
+
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
@@ -253,8 +270,7 @@ def calculate_equity_vs_ranges_multiway(
     villain_combos_list,
     board,
     game_type,
-    samples_per_point=200,
-    curve_points=100,
+    n_runouts=5000,
     seed=None,
 ):
     """Equity curve for hero vs the combined villain range pool.
@@ -264,6 +280,11 @@ def calculate_equity_vs_ranges_multiway(
     heads-up against the hero. Results are sorted by hero equity descending
     so the curve is strictly decreasing (x=0% = villain's worst on this
     board for hero, x=100% = villain's best).
+
+    n_runouts: number of board runouts to sample for the shared MC pool
+    that hero ranks are precomputed on. If n_runouts >= the number of
+    unique remaining runouts, exact enumeration is used instead (free
+    accuracy; capped at ~1100 for the flop).
 
     Returns dict with equity_curve, histogram, and summary.
     """
@@ -293,19 +314,19 @@ def calculate_equity_vs_ranges_multiway(
         sample = pool
 
     # Flop fast path: precompute hero ranks on shared boards once and reuse
-    # for every villain combo. NLHE enumerates all 990 turn+river runouts
-    # exactly; PLO samples 150 random runouts.
+    # for every villain combo. Boards are MC-sampled at n_runouts; if the
+    # request exceeds unique possible runouts, fall back to exact enumeration.
     use_fast = len(board) == 3
     precomputed_boards = None
     hero_ranks = None
     if use_fast:
         stub = remaining_deck(hero + board)
-        if game_type == "nlhe":
+        max_unique = len(stub) * (len(stub) - 1) // 2  # C(stub, 2)
+        if n_runouts >= max_unique:
             precomputed_boards = [board + list(extra) for extra in combinations(stub, 2)]
         else:
-            n_boards = min(samples_per_point, 150)
             precomputed_boards = []
-            for _ in range(n_boards):
+            for _ in range(n_runouts):
                 try:
                     extra = rng.sample(stub, 2)
                     precomputed_boards.append(board + extra)
@@ -358,7 +379,7 @@ def calculate_equity_vs_ranges_multiway(
                     # since few runouts remain).
                     res = calculate_equity_multiway(
                         hero, [villain_hand], board, game_type,
-                        mode="auto", samples=samples_per_point,
+                        mode="auto",
                     )
                     eq = res["hero"]["equity"]
             except (ValueError, CardError):

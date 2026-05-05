@@ -5,9 +5,12 @@ from flask import Flask, jsonify, render_template, request
 
 from poker.cards import CardError, card_str, parse_cards
 from poker.equity import (
+    DEFAULT_PRECISION,
     HOLE_COUNTS,
+    PRECISION_RUNOUTS,
     calculate_equity_multiway,
     calculate_equity_vs_ranges_multiway,
+    runouts_for,
 )
 from poker.hand_rankings import (
     generate_rankings_async,
@@ -211,8 +214,10 @@ def range_equity():
     if len(raw_villains) > 3:
         return _bad("Maximum 3 villains")
 
-    samples_per_point = int(data.get("samples_per_point", 200))
-    curve_points = int(data.get("curve_points", 100))
+    precision = data.get("precision", DEFAULT_PRECISION)
+    if precision not in PRECISION_RUNOUTS:
+        return _bad(f"precision must be one of {list(PRECISION_RUNOUTS)}")
+    n_runouts = runouts_for(game_type, precision)
 
     blocked = {card_str(c) for c in list(hero) + list(board)}
 
@@ -252,8 +257,7 @@ def range_equity():
             villain_combos_list,
             board,
             game_type,
-            samples_per_point=samples_per_point,
-            curve_points=curve_points,
+            n_runouts=n_runouts,
             seed=seed,
         )
     except ValueError as e:
@@ -261,6 +265,8 @@ def range_equity():
 
     result["ms"] = int((time.time() - t0) * 1000)
     result["game_type"] = game_type
+    result["precision"] = precision
+    result["n_runouts"] = n_runouts
     return jsonify(result)
 
 

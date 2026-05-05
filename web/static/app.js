@@ -591,7 +591,7 @@ async function doDistCalc(hero, villains, board, isPostflop) {
   try {
     const res = await fetch("/api/range-equity", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ game_type:state.gameType, hero, villains, board, samples_per_point:500, curve_points: state.gameType === "nlhe" ? 100 : 20 }),
+      body: JSON.stringify({ game_type:state.gameType, hero, villains, board, precision: (document.getElementById("pf-precision")?.value || "balanced") }),
     });
     const data = await res.json();
     if (data.error) { setStatus(pfx, data.error, true); return; }
@@ -667,7 +667,10 @@ function renderDistInto(id, data) {
     drawEquityCurve("pf-chart-curve", equity_curve, summary);
     drawHistogram("pf-chart-histogram", histogram);
     const fn = document.getElementById("pf-chart-footnote");
-    if (fn) fn.textContent = `${equity_curve.length} curve points · ${data.ms}ms`;
+    if (fn) {
+      const pr = data.precision ? ` · ${data.precision} (${data.n_runouts.toLocaleString()} runouts)` : "";
+      fn.textContent = `${equity_curve.length} curve points · ${data.ms}ms${pr}`;
+    }
   }));
 }
 

@@ -66,6 +66,12 @@
 
         <div class="action-row">
           <button id="pf-calculate-btn" class="primary-btn">Analyze</button>
+          <label class="precision-label" for="pf-precision">Precision</label>
+          <select id="pf-precision" class="precision-select">
+            <option value="fast">Fast</option>
+            <option value="balanced" selected>Balanced</option>
+            <option value="precise">Precise</option>
+          </select>
           <button id="pf-clear-btn" class="secondary-btn">Clear All</button>
           <span id="pf-calc-status" class="status-text"></span>
         </div>

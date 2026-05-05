@@ -461,6 +461,29 @@ main {
 .status-text { font-size: 13px; color: var(--text-muted); }
 .status-text.error { color: var(--red); }
 
+.precision-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-left: 6px;
+}
+.precision-select {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 26px 8px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M0 0l5 6 5-6z' fill='%237aa8c0'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+}
+.precision-select:hover { border-color: var(--text-muted); }
+
 /* ============================================================
    HvH results
    ============================================================ */
