@@ -321,11 +321,13 @@ def calculate_equity_vs_ranges_multiway(
     use_fast = len(board) == 3
     precomputed_boards = None
     hero_ranks = None
+    runouts_mode = "mc"
     if use_fast:
         stub = remaining_deck(hero + board)
         max_unique = len(stub) * (len(stub) - 1) // 2  # C(stub, 2)
         if n_runouts >= max_unique:
             precomputed_boards = [board + list(extra) for extra in combinations(stub, 2)]
+            runouts_mode = "exact"
         else:
             precomputed_boards = []
             for _ in range(n_runouts):
@@ -340,6 +342,7 @@ def calculate_equity_vs_ranges_multiway(
                 hero_ranks.append(best_hand(hero, fb, game_type))
             except Exception:
                 hero_ranks.append(None)
+    runouts_evaluated = len(precomputed_boards) if precomputed_boards else 0
 
     # Per-combo cost on the flop:
     #   PLO4: ~1ms (native phe omaha, sequential beats spawn overhead)
@@ -420,4 +423,10 @@ def calculate_equity_vs_ranges_multiway(
         "std_dev":     round(std_dev, 4),
     }
 
-    return {"equity_curve": curve, "histogram": histogram, "summary": summary}
+    return {
+        "equity_curve": curve,
+        "histogram": histogram,
+        "summary": summary,
+        "runouts_evaluated": runouts_evaluated,
+        "runouts_mode": runouts_mode,
+    }

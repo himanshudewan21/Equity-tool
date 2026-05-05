@@ -668,7 +668,11 @@ function renderDistInto(id, data) {
     drawHistogram("pf-chart-histogram", histogram);
     const fn = document.getElementById("pf-chart-footnote");
     if (fn) {
-      const pr = data.precision ? ` · ${data.precision} (${data.n_runouts.toLocaleString()} runouts)` : "";
+      const used = data.runouts_evaluated;
+      const mode = data.runouts_mode;
+      const pr = data.precision
+        ? ` · ${data.precision} (${used ? used.toLocaleString() : "?"} runouts${mode ? ", " + mode : ""})`
+        : "";
       fn.textContent = `${equity_curve.length} curve points · ${data.ms}ms${pr}`;
     }
   }));
