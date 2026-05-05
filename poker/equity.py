@@ -14,12 +14,14 @@ _MP_THRESHOLD = 100
 _MP_WORKERS = max(1, (os.cpu_count() or 4) - 1)
 
 
-# Range-equity sample counts per precision level and game type. Numbers chosen
-# to keep wall time roughly comparable across games (PLO5 best_of_omaha is
-# ~12× slower per call than NLHE evaluate_7).
+# Range-equity sample counts per precision level and game type.
+# Each tier is genuinely distinct: max unique runouts on the flop are
+# ~1081 (NLHE), ~903 (PLO4), ~861 (PLO5), so Balanced stays under those
+# caps and Precise auto-falls to exact enumeration. PLO5 numbers are
+# scaled because each evaluation is ~12× slower than NLHE.
 PRECISION_RUNOUTS = {
-    "fast":     {"nlhe": 1000,  "plo4": 1000,  "plo5": 250},
-    "balanced": {"nlhe": 5000,  "plo4": 5000,  "plo5": 1000},
+    "fast":     {"nlhe": 200,   "plo4": 200,   "plo5": 200},
+    "balanced": {"nlhe": 1000,  "plo4": 500,   "plo5": 500},
     "precise":  {"nlhe": 50000, "plo4": 50000, "plo5": 5000},
 }
 DEFAULT_PRECISION = "balanced"
