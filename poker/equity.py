@@ -227,12 +227,13 @@ def calculate_equity_vs_ranges_multiway(
     curve_points=100,
     seed=None,
 ):
-    """Compute equity curve and histogram for hero vs sorted villain range(s).
+    """Equity curve for hero vs the combined villain range pool.
 
-    villain_combos_list: list (one per villain) of lists of card-string tuples,
-                         sorted strongest-first (index 0 = strongest combo).
-    curve_points: number of x-axis points (default 100 → 0%,1%,...,100%).
-    samples_per_point: MC samples used to evaluate equity at each curve point.
+    villain_combos_list: one list per villain of card-string tuples.
+    All villain lists are merged into one pool; each combo is evaluated
+    heads-up against the hero. Results are sorted by hero equity descending
+    so the curve is strictly decreasing (x=0% = villain's worst on this
+    board for hero, x=100% = villain's best).
 
     Returns dict with equity_curve, histogram, and summary.
     """
@@ -240,20 +241,38 @@ def calculate_equity_vs_ranges_multiway(
     hero = list(hero)
     rng = random.Random(seed)
 
-    # PLO flop fast path: precompute hero ranks on a shared set of board samples
-    # so hero is evaluated once instead of once per curve point.
-    use_plo_fast = (game_type != "nlhe" and len(board) == 3
-                    and len(villain_combos_list) == 1)
+    # Merge all villain combo pools into one flat deduped list.
+    pool = []
+    seen_keys: set = set()
+    for combos in villain_combos_list:
+        for combo in combos:
+            key = tuple(sorted(combo))
+            if key not in seen_keys:
+                seen_keys.add(key)
+                pool.append(combo)
+
+    if not pool:
+        raise ValueError("No villain combos in combined pool")
+
+    # Determine which combos to evaluate.
+    # PLO flop: cap at 400 (each combo × 150 boards × 60 PLO evals ≈ 3.6M calls).
+    # NLHE or PLO turn/river: evaluate the full pool (exact enum is fast).
+    if game_type != "nlhe" and len(board) == 3 and len(pool) > 400:
+        sample = rng.sample(pool, 400)
+    else:
+        sample = pool
+
+    # PLO flop fast path: precompute hero ranks on shared board samples once.
+    use_plo_fast = (game_type != "nlhe" and len(board) == 3)
     precomputed_boards = None
     hero_ranks = None
     if use_plo_fast:
         n_boards = min(samples_per_point, 150)
         stub = remaining_deck(hero + board)
-        hole_count = HOLE_COUNTS[game_type]
         precomputed_boards = []
         for _ in range(n_boards):
             try:
-                extra = rng.sample(stub, 2)  # turn + river
+                extra = rng.sample(stub, 2)
                 precomputed_boards.append(board + extra)
             except ValueError:
                 break
@@ -264,28 +283,14 @@ def calculate_equity_vs_ranges_multiway(
             except Exception:
                 hero_ranks.append(None)
 
+    # Evaluate hero equity heads-up against each sampled combo.
     equities = []
-    curve = []
-
-    for xi in range(curve_points + 1):
-        # Pick the combo at xi-th percentile from each villain's sorted range.
-        villain_hands = []
-        for combos in villain_combos_list:
-            if not combos:
-                continue
-            idx = min(int(xi / 100 * len(combos)), len(combos) - 1)
-            try:
-                villain_hands.append(parse_cards(list(combos[idx])))
-            except CardError:
-                villain_hands.append(parse_cards(list(combos[min(idx + 1, len(combos) - 1)])))
-
-        if not villain_hands:
+    for combo in sample:
+        try:
+            villain_hands = [parse_cards(list(combo))]
+        except CardError:
             continue
 
-        # Equity calculation — three paths:
-        # 1. PLO flop, single villain: use precomputed hero boards (fastest)
-        # 2. NLHE or PLO turn/river: exact enumeration (fast exact evaluator / few boards)
-        # 3. PLO flop, multi-villain: MC per point
         try:
             if use_plo_fast and precomputed_boards:
                 eq = _plo_equity_precomputed(
@@ -311,12 +316,27 @@ def calculate_equity_vs_ranges_multiway(
             continue
 
         equities.append(eq)
-        # avg_top_pct = mean equity vs all combos from index 0 up to xi (inclusive).
-        avg_top = sum(equities) / len(equities)
-        curve.append({"x": xi, "point_equity": round(eq, 4), "avg_top_pct": round(avg_top, 4)})
 
     if not equities:
         raise ValueError("No valid curve points could be computed (all combos blocked?)")
+
+    # Sort descending: x=0% = villain's weakest on this board (hero has most equity),
+    # x=100% = villain's strongest on this board (hero has least equity).
+    sorted_eq = sorted(equities, reverse=True)
+    n = len(sorted_eq)
+    raw_points = []
+    for i, eq in enumerate(sorted_eq):
+        x_pct = round(i * 100 / max(n - 1, 1))
+        raw_points.append({"x": x_pct, "point_equity": round(eq, 4)})
+
+    # Right-side cumulative average: avg_top_pct at x = avg equity against
+    # villain's strongest (100-x)% of their range on this board.
+    m = len(raw_points)
+    cum_sum = 0.0
+    for j in range(m - 1, -1, -1):
+        cum_sum += raw_points[j]["point_equity"]
+        raw_points[j]["avg_top_pct"] = round(cum_sum / (m - j), 4)
+    curve = raw_points
 
     histogram = _compute_histogram(equities)
 

@@ -17,7 +17,7 @@ const state = {
   gameType: "nlhe",
   tab: "preflop",
   hero: { cards: [], textInput: "" },
-  board: { cards: [], stage: "flop" },
+  board: { cards: [], stage: "flop", textInput: "" },
   villains: [],
   nextVillainId: 0,
   activeSlot: null,
@@ -332,6 +332,9 @@ function renderBoardSlots() {
   area.innerHTML = "";
   const max = state.board.stage === "flop" ? 3 : state.board.stage === "turn" ? 4 : 5;
 
+  area.appendChild(buildTextInput("board", null,
+    max === 3 ? "e.g. Ah 7c 2d" : max === 4 ? "e.g. Ah 7c 2d Ks" : "e.g. Ah 7c 2d Ks 9h"));
+
   [["FLOP",0,3],["TURN",3,4],["RIVER",4,5]].forEach(([lbl,from,to]) => {
     if (to > max) return;
     const group = document.createElement("div");
@@ -384,14 +387,22 @@ function buildTextInput(owner, villainId, placeholder) {
   input.placeholder = placeholder;
   input.value = owner === "hero"
     ? state.hero.textInput
+    : owner === "board"
+    ? state.board.textInput
     : (state.villains.find(v => v.id === villainId) || {}).textInput || "";
 
   const apply = () => {
-    const cards = parseCardText(input.value).slice(0, HOLE_COUNTS[state.gameType]);
     if (owner === "hero") {
+      const cards = parseCardText(input.value).slice(0, HOLE_COUNTS[state.gameType]);
       state.hero.textInput = input.value;
       state.hero.cards = cards;
+    } else if (owner === "board") {
+      const max = state.board.stage === "flop" ? 3 : state.board.stage === "turn" ? 4 : 5;
+      const cards = parseCardText(input.value).slice(0, max);
+      state.board.textInput = input.value;
+      state.board.cards = cards;
     } else {
+      const cards = parseCardText(input.value).slice(0, HOLE_COUNTS[state.gameType]);
       const v = state.villains.find(x => x.id === villainId);
       if (v) { v.textInput = input.value; v.cards = cards; }
     }
@@ -440,6 +451,7 @@ function onCardPick(card) {
 
   } else if (owner === "board") {
     state.board.cards[index] = card;
+    state.board.textInput = state.board.cards.filter(Boolean).join(" ");
     const max = state.board.stage === "flop" ? 3 : state.board.stage === "turn" ? 4 : 5;
     const nxt = nextEmpty(state.board.cards, index, max);
     state.activeSlot = nxt !== undefined ? { owner:"board", index:nxt } : null;
@@ -464,6 +476,7 @@ function removeCard(owner, index) {
     state.hero.textInput = state.hero.cards.filter(Boolean).join("");
   } else if (owner === "board") {
     state.board.cards.splice(index, 1);
+    state.board.textInput = state.board.cards.filter(Boolean).join(" ");
   } else if (owner.startsWith("villain-")) {
     const vid = parseInt(owner.split("-")[1], 10);
     const v = state.villains.find(x => x.id === vid);
@@ -485,7 +498,7 @@ function addVillain() {
 function onClear() {
   state.hero.cards = []; state.hero.textInput = "";
   state.villains = [makeVillain()];
-  state.board.cards = [];
+  state.board.cards = []; state.board.textInput = "";
   state.results = null; state.activeSlot = null;
   renderAll();
 }
@@ -667,7 +680,7 @@ function drawEquityCurve(canvasId, curveData, summary) {
   const canvas = document.getElementById(canvasId);
   if (!canvas || !curveData?.length) return;
   const W = Math.max(300, canvas.parentElement.clientWidth);
-  const H = Math.round(W * 0.65);
+  const H = Math.round(W * 0.78);
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d");
 
@@ -738,8 +751,12 @@ function drawEquityCurve(canvasId, curveData, summary) {
   ctx.save(); ctx.translate(15, PAD.top + pH / 2); ctx.rotate(-Math.PI / 2);
   ctx.textAlign = "center"; ctx.fillStyle = "#7aa8c0"; ctx.font = "11px system-ui";
   ctx.fillText("Hero equity (%)", 0, 0); ctx.restore();
-  ctx.fillStyle = "#7aa8c0"; ctx.font = "11px system-ui"; ctx.textAlign = "center";
-  ctx.fillText("Villain combo rank (%) →", PAD.left + pW / 2, H - 8);
+  ctx.fillStyle = "#7aa8c0"; ctx.font = "11px system-ui"; ctx.textAlign = "left";
+  ctx.fillText("← Weakest", PAD.left, H - 8);
+  ctx.textAlign = "center";
+  ctx.fillText("Villain range (%)", PAD.left + pW / 2, H - 8);
+  ctx.textAlign = "right";
+  ctx.fillText("Strongest →", PAD.left + pW, H - 8);
 
   attachCurveTooltip(canvas, curveData, summary, PAD, pW, pH);
 }
@@ -762,7 +779,7 @@ function attachCurveTooltip(canvas, curveData, summary, PAD, pW, pH) {
         <span class="tt-val tt-red">${pct(nearest.point_equity)}</span>
       </div>
       <div class="tt-row">
-        <span><span class="tt-swatch" style="background:#5bc8f0"></span>Avg (top ${nearest.x}%)</span>
+        <span><span class="tt-swatch" style="background:#5bc8f0"></span>Avg (top ${100 - nearest.x}%)</span>
         <span class="tt-val tt-blue">${pct(nearest.avg_top_pct)}</span>
       </div>`;
     let tx = e.clientX + 18, ty = e.clientY - 70;
@@ -795,7 +812,7 @@ function drawHistogram(canvasId, histData) {
   const canvas = document.getElementById(canvasId);
   if (!canvas || !histData) return;
   const W = Math.max(300, canvas.parentElement.clientWidth);
-  const H = Math.round(W * 0.65);
+  const H = Math.round(W * 0.78);
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d");
 
