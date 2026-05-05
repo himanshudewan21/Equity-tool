@@ -1,9 +1,17 @@
+import os
 import random
 import statistics
+from concurrent.futures import ProcessPoolExecutor
 from itertools import combinations
 
 from .cards import parse_cards, card_str, remaining_deck, CardError
 from .evaluator import best_hand
+
+
+# Process pool spawn cost is ~hundreds of ms on macOS, so only parallelise
+# when the per-combo loop is large enough to amortise it.
+_MP_THRESHOLD = 100
+_MP_WORKERS = max(1, (os.cpu_count() or 4) - 1)
 
 
 # ---------------------------------------------------------------------------
@@ -216,6 +224,30 @@ def _equity_precomputed(hero, villain_hand, board, game_type, hero_ranks, boards
     return (wins + ties / 2) / total
 
 
+def _chunk_equities(args):
+    """ProcessPoolExecutor worker: evaluate a chunk of villain combos.
+
+    Returns a list of equities for combos that produced a valid result.
+    Defined at module scope so it pickles cleanly under macOS spawn.
+    """
+    chunk, hero, board, game_type, hero_ranks, boards_list = args
+    out = []
+    for combo in chunk:
+        try:
+            villain_hand = parse_cards(list(combo))
+        except CardError:
+            continue
+        try:
+            eq = _equity_precomputed(
+                hero, villain_hand, board, game_type, hero_ranks, boards_list,
+            )
+        except (ValueError, CardError):
+            continue
+        if eq is not None:
+            out.append(eq)
+    return out
+
+
 def calculate_equity_vs_ranges_multiway(
     hero,
     villain_combos_list,
@@ -286,34 +318,52 @@ def calculate_equity_vs_ranges_multiway(
             except Exception:
                 hero_ranks.append(None)
 
+    # Per-combo cost on the flop:
+    #   PLO4: ~1ms (native phe omaha, sequential beats spawn overhead)
+    #   NLHE: ~6ms (full 990-runout enumeration)
+    #   PLO5: ~30ms (100-call inner loop, biggest beneficiary)
+    # We parallelise PLO5 and NLHE flop, skip PLO4.
+    use_mp = (
+        use_fast and precomputed_boards and len(board) == 3
+        and game_type != "plo4"
+        and len(sample) >= _MP_THRESHOLD
+    )
+
     # Evaluate hero equity heads-up against each sampled combo.
     equities = []
-    for combo in sample:
-        try:
-            villain_hand = parse_cards(list(combo))
-        except CardError:
-            continue
-
-        try:
-            if use_fast and precomputed_boards:
-                eq = _equity_precomputed(
-                    hero, villain_hand, board, game_type,
-                    hero_ranks, precomputed_boards,
-                )
-                if eq is None:
-                    continue
-            else:
-                # Turn/river: fall through to the standard auto-dispatch (exact
-                # enumeration is fast since few runouts remain).
-                res = calculate_equity_multiway(
-                    hero, [villain_hand], board, game_type,
-                    mode="auto", samples=samples_per_point,
-                )
-                eq = res["hero"]["equity"]
-        except (ValueError, CardError):
-            continue
-
-        equities.append(eq)
+    if use_mp:
+        n_workers = min(_MP_WORKERS, max(1, len(sample) // 25))
+        chunks = [sample[i::n_workers] for i in range(n_workers) if sample[i::n_workers]]
+        args_list = [(chunk, hero, board, game_type, hero_ranks, precomputed_boards)
+                     for chunk in chunks]
+        with ProcessPoolExecutor(max_workers=n_workers) as pool:
+            for chunk_eqs in pool.map(_chunk_equities, args_list):
+                equities.extend(chunk_eqs)
+    else:
+        for combo in sample:
+            try:
+                villain_hand = parse_cards(list(combo))
+            except CardError:
+                continue
+            try:
+                if use_fast and precomputed_boards:
+                    eq = _equity_precomputed(
+                        hero, villain_hand, board, game_type,
+                        hero_ranks, precomputed_boards,
+                    )
+                    if eq is None:
+                        continue
+                else:
+                    # Turn/river: standard auto-dispatch (exact enum is fast
+                    # since few runouts remain).
+                    res = calculate_equity_multiway(
+                        hero, [villain_hand], board, game_type,
+                        mode="auto", samples=samples_per_point,
+                    )
+                    eq = res["hero"]["equity"]
+            except (ValueError, CardError):
+                continue
+            equities.append(eq)
 
     if not equities:
         raise ValueError("No valid curve points could be computed (all combos blocked?)")
