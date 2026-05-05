@@ -142,7 +142,8 @@ def generate_rankings(game_type: str, samples_per_hand: int = 100, seed: int = 4
     """Generate and cache hand strength rankings for the given game type.
 
     NLH: evaluates all 169 canonical hand types (~5s).
-    PLO4/PLO5: samples 50K random starting hands (~3-8 min).
+    PLO4: samples 5K random starting hands (~6 min).
+    PLO5: samples 5K random starting hands (~10 min).
     """
     DATA_DIR.mkdir(exist_ok=True)
     rng = random.Random(seed)
@@ -189,7 +190,7 @@ def _generate_rankings_nlhe(rng: random.Random, samples: int) -> None:
 
 def _generate_rankings_plo(game_type: str, hole_count: int,
                             rng: random.Random, samples: int,
-                            n_sample: int = 2_000) -> None:
+                            n_sample: int = 5_000) -> None:
     deck = full_deck()
     seen: set = set()
     sample_hands = []
