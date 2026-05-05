@@ -253,19 +253,16 @@ def calculate_equity_vs_ranges_multiway(
         raise ValueError("No villain combos in combined pool")
 
     # Determine which combos to evaluate.
-    # PLO flop: cap to keep time reasonable. PLO5 evaluator is ~1.65× slower
-    # than PLO4 per hand, so PLO5 uses tighter caps.
+    # PLO flop: cap at 400 to keep the loop bounded.
     # NLHE or PLO turn/river: evaluate the full pool (exact enum is fast).
-    if game_type == "plo5" and len(board) == 3 and len(pool) > 200:
-        sample = rng.sample(pool, 200)
-    elif game_type == "plo4" and len(board) == 3 and len(pool) > 400:
+    if game_type != "nlhe" and len(board) == 3 and len(pool) > 400:
         sample = rng.sample(pool, 400)
     else:
         sample = pool
 
     # Flop fast path: precompute hero ranks on shared boards once and reuse
     # for every villain combo. NLHE enumerates all 990 turn+river runouts
-    # exactly; PLO samples (PLO5 capped lower because its evaluator is slower).
+    # exactly; PLO samples 150 random runouts.
     use_fast = len(board) == 3
     precomputed_boards = None
     hero_ranks = None
@@ -274,8 +271,7 @@ def calculate_equity_vs_ranges_multiway(
         if game_type == "nlhe":
             precomputed_boards = [board + list(extra) for extra in combinations(stub, 2)]
         else:
-            board_cap = 100 if game_type == "plo5" else 150
-            n_boards = min(samples_per_point, board_cap)
+            n_boards = min(samples_per_point, 150)
             precomputed_boards = []
             for _ in range(n_boards):
                 try:
