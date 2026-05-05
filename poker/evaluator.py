@@ -1,6 +1,17 @@
 from itertools import combinations
 from collections import Counter
 
+from phevaluator import Card as _PheCard
+from phevaluator import evaluate_cards as _phe_eval5
+from phevaluator import evaluate_omaha_cards as _phe_omaha
+
+# Map our internal (rank_int, suit_char) tuple → phevaluator card index (0..51).
+# Built once at import time so the hot loop pays only a dict lookup.
+_RANK_CHAR = {2:"2",3:"3",4:"4",5:"5",6:"6",7:"7",8:"8",9:"9",
+              10:"T",11:"J",12:"Q",13:"K",14:"A"}
+_PHE_INT = {(r, s): int(_PheCard(_RANK_CHAR[r] + s))
+            for r in range(2, 15) for s in "shdc"}
+
 # Hand category ranks (higher is better)
 HIGH_CARD = 0
 PAIR = 1
@@ -219,19 +230,33 @@ def best_of_7(cards):
 def best_of_omaha(hole_cards, board_cards):
     """PLO evaluation: exactly 2 from hole cards + exactly 3 from board cards.
 
-    Works for both PLO4 (4 hole cards) and PLO5 (5 hole cards).
-    PLO4: C(4,2)=6 × C(5,3)=10 = 60 rank_5 calls.
-    PLO5: C(5,2)=10 × C(5,3)=10 = 100 rank_5 calls.
+    Backed by phevaluator (C extension):
+      - PLO4 with a 5-card board uses native evaluate_omaha_cards in one call.
+      - All other shapes (PLO5, or PLO4 on flop/turn) loop over the inner
+        sub-hands but each rank_5 is a fast C lookup.
+
+    Returns an integer where higher = better (negated phe rank), comparable
+    with > / == like the legacy tuple form. Distinct hand strengths produce
+    distinct ints, so equality still means a true tie.
     """
     if len(board_cards) < 3:
         raise ValueError("PLO requires at least 3 board cards")
-    best = None
-    for hc in combinations(hole_cards, 2):
-        for bc in combinations(board_cards, 3):
-            r = rank_5(list(hc) + list(bc))
-            if best is None or r > best:
+
+    # Fast path: PLO4 + river — single native batch evaluation.
+    if len(hole_cards) == 4 and len(board_cards) == 5:
+        return -_phe_omaha(*(_PHE_INT[c] for c in board_cards),
+                           *(_PHE_INT[c] for c in hole_cards))
+
+    # General path: enumerate (2 hole) × (3 board) sub-hands, take best.
+    hole_phe = [_PHE_INT[c] for c in hole_cards]
+    board_phe = [_PHE_INT[c] for c in board_cards]
+    best = 7463  # phe ranks are 1..7462; 7463 is "worse than worst"
+    for hc in combinations(hole_phe, 2):
+        for bc in combinations(board_phe, 3):
+            r = _phe_eval5(*hc, *bc)
+            if r < best:
                 best = r
-    return best
+    return -best
 
 
 def best_hand(hole_cards, board_cards, game_type):
