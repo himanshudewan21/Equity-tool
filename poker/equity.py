@@ -10,8 +10,11 @@ from .evaluator import best_hand
 
 # Process pool spawn cost is ~hundreds of ms on macOS, so only parallelise
 # when the per-combo loop is large enough to amortise it.
+# MP_WORKERS env var caps worker count for memory-constrained deploys
+# (each spawned worker is ~80MB). Default = cpu_count() - 1 for local dev.
 _MP_THRESHOLD = 100
-_MP_WORKERS = max(1, (os.cpu_count() or 4) - 1)
+_MP_WORKERS_ENV = int(os.environ.get("MP_WORKERS", "0") or "0")
+_MP_WORKERS = _MP_WORKERS_ENV if _MP_WORKERS_ENV > 0 else max(1, (os.cpu_count() or 4) - 1)
 
 
 # Range-equity sample counts per precision level and game type.

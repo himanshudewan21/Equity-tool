@@ -9,3 +9,8 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.7
+      # Cap multiprocessing pool workers — each spawned worker is ~80MB and
+      # os.cpu_count() reports the host's count (4-8) not the container's.
+      # Render Free has 512MB total, so 1 worker keeps peak RAM under ~430MB.
+      - key: MP_WORKERS
+        value: 1
