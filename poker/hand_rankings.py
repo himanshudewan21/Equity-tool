@@ -261,7 +261,15 @@ def ensure_rankings(game_type: str, samples_per_hand: int = 100) -> list:
 # ---------------------------------------------------------------------------
 
 def _all_combos_from_rankings(rankings: list, game_type: str) -> list[tuple]:
-    """Flatten rankings into a sorted list of combo tuples (strongest first)."""
+    """Flatten rankings into a sorted list of combo tuples (strongest first).
+
+    PLO supports two on-disk schemas:
+      Old (MC-generated): { "combo": ["As","Ts",...], "equity": float }
+      New (PPT-sourced):  { "rank": int, "example": "AsTsAhTh",
+                            "ppt_hand": "(AT)(AT)", "suit_pattern": ..., ... }
+    The new format gives one canonical-type representative per entry; we use
+    its `example` directly as the specific combo.
+    """
     result = []
     if game_type == "nlhe":
         for entry in rankings:
@@ -269,7 +277,11 @@ def _all_combos_from_rankings(rankings: list, game_type: str) -> list[tuple]:
                 result.append(tuple(combo))
     else:
         for entry in rankings:
-            result.append(tuple(entry["combo"]))
+            if "combo" in entry:
+                result.append(tuple(entry["combo"]))
+            else:
+                ex = entry["example"]
+                result.append(tuple(ex[i:i+2] for i in range(0, len(ex), 2)))
     return result
 
 
