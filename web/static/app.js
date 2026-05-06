@@ -320,7 +320,7 @@ function buildRangeInput(villain) {
 }
 
 function formatRange(lo, hi) {
-  return lo === 0 ? `Top ${hi}%` : `${lo}%–${hi}%`;
+  return lo === 0 ? `Top ${hi}%` : `${hi}%–${lo}%`;
 }
 
 // ============================================================
