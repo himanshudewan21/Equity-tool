@@ -752,3 +752,95 @@ main {
   transition: background 0.15s;
 }
 .modal-cancel-btn:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+
+/* ============================================================
+   Mobile (≤ 600px) — stack the form layout, shrink chrome
+   ============================================================ */
+@media (max-width: 600px) {
+  body { padding-bottom: 40px; }
+
+  /* Header: title + game tabs wrap vertically */
+  header { padding: 12px 14px; gap: 12px; flex-wrap: wrap; }
+  header h1 { font-size: 15px; flex-basis: 100%; }
+  #game-tabs { width: 100%; justify-content: center; }
+  .tab-btn { padding: 5px 14px; font-size: 12px; }
+
+  #rankings-banner { padding: 8px 14px; font-size: 12px; }
+  #sub-tabs { padding: 8px 14px 0; }
+
+  main { padding: 12px 14px; }
+
+  /* Player row: label/toggle on top, hand-area full-width below */
+  .player-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+  .row-left {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    min-width: 0;
+    gap: 10px;
+  }
+
+  /* Hand-area: text input forced to its own row (flex-basis 100%),
+     card slots wrap below it. */
+  .hand-area {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .card-text-input { flex-basis: 100%; width: 100%; }
+
+  /* Smaller card slots so 5 PLO5 cards fit on one line */
+  .card-slot { width: 44px; height: 60px; }
+  .cs-rank { font-size: 17px; }
+  .cs-suit { font-size: 13px; }
+
+  /* Board stage label flips to horizontal, sits above the slots */
+  .board-slot-group {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  .board-stage-label {
+    writing-mode: horizontal-tb;
+    transform: none;
+    font-size: 10px;
+  }
+
+  /* Range controls wrap onto separate lines on narrow screens */
+  .range-compact { gap: 10px; }
+  .range-display { font-size: 15px; min-width: 0; }
+  .range-num { width: 46px; }
+
+  /* Action row: wrap, hide the decorative PRECISION label */
+  .action-row {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 8px 0 16px;
+  }
+  .primary-btn { padding: 10px 20px; flex: 1 0 auto; }
+  .secondary-btn { padding: 9px 16px; flex: 0 0 auto; }
+  .precision-label { display: none; }
+  .precision-select { flex: 0 0 auto; }
+  .status-text { flex-basis: 100%; }
+
+  /* Pin the remove-villain button to the top-right corner instead of
+     vertically centred (the row is now taller / column-shaped) */
+  .remove-villain-btn {
+    top: 12px;
+    transform: none;
+    right: 12px;
+  }
+
+  /* Stat cards a bit tighter */
+  .stat-card { padding: 14px 16px; }
+  .stat-value { font-size: 22px; }
+  .stat-card.primary .stat-value { font-size: 32px; }
+}
