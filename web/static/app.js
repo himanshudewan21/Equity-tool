@@ -670,10 +670,12 @@ function renderDistInto(id, data) {
     if (fn) {
       const used = data.runouts_evaluated;
       const mode = data.runouts_mode;
+      const nv = data.n_villains;
+      const villainPart = nv && nv > 1 ? ` · ${nv}-way` : "";
       const pr = data.precision
         ? ` · ${data.precision} (${used ? used.toLocaleString() : "?"} runouts${mode ? ", " + mode : ""})`
         : "";
-      fn.textContent = `${equity_curve.length} curve points · ${data.ms}ms${pr}`;
+      fn.textContent = `${equity_curve.length} curve points${villainPart} · ${data.ms}ms${pr}`;
     }
   }));
 }
