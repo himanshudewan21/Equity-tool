@@ -258,6 +258,7 @@ def range_equity():
             board,
             game_type,
             n_runouts=n_runouts,
+            precision=precision,
             seed=seed,
         )
     except ValueError as e:

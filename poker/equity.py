@@ -24,12 +24,30 @@ PRECISION_RUNOUTS = {
     "balanced": {"nlhe": 1000,  "plo4": 500,   "plo5": 500},
     "precise":  {"nlhe": 50000, "plo4": 50000, "plo5": 5000},
 }
+
+# Maximum villain combos evaluated per request (i.e. equity-curve dot count).
+# NLHE's natural pool is bounded by C(50,2)=1326 so its cap is effectively
+# unreachable. PLO4 has lots of headroom thanks to native phe omaha eval;
+# PLO5 is the bottleneck and is sized so each precision tier stays within
+# a sensible wall-time budget.
+COMBO_CAPS = {
+    "fast":     {"nlhe": 5000, "plo4": 5000, "plo5": 1000},
+    "balanced": {"nlhe": 5000, "plo4": 2000, "plo5": 600},
+    "precise":  {"nlhe": 5000, "plo4": 2000, "plo5": 400},
+}
+
 DEFAULT_PRECISION = "balanced"
 
 
 def runouts_for(game_type: str, precision: str = DEFAULT_PRECISION) -> int:
     """Map a precision label to a per-game runout count."""
     table = PRECISION_RUNOUTS.get(precision) or PRECISION_RUNOUTS[DEFAULT_PRECISION]
+    return table[game_type]
+
+
+def combo_cap_for(game_type: str, precision: str = DEFAULT_PRECISION) -> int:
+    """Map a precision label to the per-game cap on villain combos evaluated."""
+    table = COMBO_CAPS.get(precision) or COMBO_CAPS[DEFAULT_PRECISION]
     return table[game_type]
 
 
@@ -273,6 +291,7 @@ def calculate_equity_vs_ranges_multiway(
     board,
     game_type,
     n_runouts=5000,
+    precision=DEFAULT_PRECISION,
     seed=None,
 ):
     """Equity curve for hero vs the combined villain range pool.
@@ -308,10 +327,12 @@ def calculate_equity_vs_ranges_multiway(
         raise ValueError("No villain combos in combined pool")
 
     # Determine which combos to evaluate.
-    # PLO flop: cap at 400 to keep the loop bounded.
-    # NLHE or PLO turn/river: evaluate the full pool (exact enum is fast).
-    if game_type != "nlhe" and len(board) == 3 and len(pool) > 400:
-        sample = rng.sample(pool, 400)
+    # On the flop, cap the villain pool at COMBO_CAPS[precision][game_type].
+    # NLHE's pool never exceeds its cap. NLHE or PLO turn/river just take
+    # the whole pool (the cap doesn't apply there).
+    combo_cap = combo_cap_for(game_type, precision)
+    if len(board) == 3 and len(pool) > combo_cap:
+        sample = rng.sample(pool, combo_cap)
     else:
         sample = pool
 
@@ -429,4 +450,5 @@ def calculate_equity_vs_ranges_multiway(
         "summary": summary,
         "runouts_evaluated": runouts_evaluated,
         "runouts_mode": runouts_mode,
+        "combo_cap": combo_cap,
     }
