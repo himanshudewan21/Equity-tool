@@ -1,6 +1,10 @@
 import hashlib
+import logging
+import threading
 import time
+from collections import OrderedDict
 
+import requests as http_requests
 from flask import Flask, jsonify, render_template, request
 
 from poker.cards import CardError, card_str, parse_cards
@@ -21,6 +25,70 @@ from poker.hand_rankings import (
 )
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+# IP → (location, isp) cache, populated lazily by a background thread.
+# Bounded so a long-running worker doesn't accumulate unbounded entries.
+_geo_cache: "OrderedDict[str, tuple[str, str]]" = OrderedDict()
+_geo_inflight: set = set()  # IPs whose lookup is already running
+_geo_cache_lock = threading.Lock()
+_GEO_CACHE_MAX = 1000
+
+
+def _resolve_geo(ip: str) -> None:
+    """Background lookup; populate the cache and emit a follow-up log line."""
+    try:
+        try:
+            resp = http_requests.get(f"http://ip-api.com/json/{ip}", timeout=2)
+            geo = resp.json()
+            location = f"{geo.get('city', '?')}, {geo.get('regionName', '?')}, {geo.get('country', '?')}"
+            isp = geo.get("isp", "?")
+        except Exception:
+            location, isp = "unknown", "unknown"
+        with _geo_cache_lock:
+            _geo_cache[ip] = (location, isp)
+            if len(_geo_cache) > _GEO_CACHE_MAX:
+                _geo_cache.popitem(last=False)
+        logger.info(f"[VISITOR-RESOLVED] IP={ip} | Location={location} | ISP={isp}")
+    finally:
+        with _geo_cache_lock:
+            _geo_inflight.discard(ip)
+
+
+@app.before_request
+def log_visitor_ip():
+    # Skip noisy paths (static assets, favicon) — they don't need IP tracking.
+    p = request.path
+    if p.startswith("/static/") or p == "/favicon.ico":
+        return
+
+    real_ip = request.headers.get("X-Forwarded-For") or request.remote_addr or "unknown"
+    # X-Forwarded-For may be a comma-separated chain; take the original client.
+    real_ip = real_ip.split(",")[0].strip()
+
+    # Decide atomically whether this request is the one that spawns the
+    # background lookup. Otherwise reuse the in-flight result.
+    with _geo_cache_lock:
+        cached = _geo_cache.get(real_ip)
+        spawn_new = cached is None and real_ip not in _geo_inflight
+        if spawn_new:
+            _geo_inflight.add(real_ip)
+
+    if cached is not None:
+        location, isp = cached
+    else:
+        location, isp = "(looking up)", "(looking up)"
+        if spawn_new:
+            threading.Thread(target=_resolve_geo, args=(real_ip,), daemon=True).start()
+
+    logger.info(
+        f"[VISITOR] IP={real_ip} | Location={location} | ISP={isp} "
+        f"| {request.method} {request.path}"
+    )
+
 
 VALID_GAME_TYPES = ("nlhe", "plo4", "plo5")
 
