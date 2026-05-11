@@ -1,11 +1,16 @@
 import os
 import random
 import statistics
+import threading
 from concurrent.futures import ProcessPoolExecutor
 from itertools import combinations
 
+import numpy as np
+
 from .cards import parse_cards, card_str, remaining_deck, CardError
 from .evaluator import best_hand, best_hand_rank
+
+_INT_SENTINEL = np.iinfo(np.int32).min  # marks None/invalid ranks in numpy arrays
 
 
 # Process pool spawn cost is ~hundreds of ms on macOS, so only parallelise
@@ -23,18 +28,17 @@ _MP_WORKERS = _MP_WORKERS_ENV if _MP_WORKERS_ENV > 0 else max(1, (os.cpu_count()
 # caps and Precise auto-falls to exact enumeration. PLO5 numbers are
 # scaled because each evaluation is ~12× slower than NLHE.
 PRECISION_RUNOUTS = {
-    "fast":     {"nlhe": 200,   "plo4": 200,   "plo5": 200},
-    "balanced": {"nlhe": 1000,  "plo4": 500,   "plo5": 500},
+    "fast":     {"nlhe": 200,   "plo4": 100,   "plo5": 100},
+    "balanced": {"nlhe": 1000,  "plo4": 300,   "plo5": 250},
     "precise":  {"nlhe": 50000, "plo4": 50000, "plo5": 5000},
 }
 
-# Per-villain rank-precompute cap. Determines how many distinct combos
-# from each villain's range get their rank computed on the shared board
-# pool. PLO5 is the bottleneck (~30μs per best_of_omaha vs ~7.5μs PLO4
-# native and ~2.5μs NLHE). NLHE/PLO4 have plenty of headroom.
+# Per-villain rank-precompute cap. PLO4/5 reduced vs NLHE because each
+# evaluation runs 60 sub-hand phe calls (vs 1 for NLHE); the vectorised
+# numpy equity loop means fewer combos still yield a smooth curve.
 PER_VILLAIN_CAPS = {
-    "fast":     {"nlhe": 200, "plo4": 200, "plo5": 100},
-    "balanced": {"nlhe": 300, "plo4": 300, "plo5": 150},
+    "fast":     {"nlhe": 200, "plo4": 75,  "plo5": 50},
+    "balanced": {"nlhe": 300, "plo4": 150, "plo5": 100},
     "precise":  {"nlhe": 500, "plo4": 500, "plo5": 200},
 }
 
@@ -43,8 +47,8 @@ PER_VILLAIN_CAPS = {
 # Independent of villain count so the curve resolution stays consistent
 # whether the user has 1, 2, or 3 opponents.
 TUPLE_CAPS = {
-    "fast":     {"nlhe": 1000, "plo4": 1000, "plo5": 500},
-    "balanced": {"nlhe": 2000, "plo4": 2000, "plo5": 1000},
+    "fast":     {"nlhe": 1000, "plo4": 500,  "plo5": 300},
+    "balanced": {"nlhe": 2000, "plo4": 1000, "plo5": 500},
     "precise":  {"nlhe": 5000, "plo4": 3000, "plo5": 1500},
 }
 
@@ -394,6 +398,145 @@ def _tuple_equity(
     return (wins + ties / 2) / total
 
 
+# ---------------------------------------------------------------------------
+# NumPy vectorised equity helpers
+# ---------------------------------------------------------------------------
+
+_SUIT_IDX = {'c': 0, 'd': 1, 'h': 2, 's': 3}
+
+
+def _card_to_idx(card):
+    """(rank, suit) → 0..51 index."""
+    return (card[0] - 2) * 4 + _SUIT_IDX[card[1]]
+
+
+def _rank_to_int32(rank):
+    """Convert a comparable rank (int or tuple) to a single int32.
+
+    PLO best_hand_rank already returns a negative phe int.
+    NLHE best_hand_rank returns a tuple (category, v1, v2, ...) which is
+    encoded to a single int using base-15 so lexicographic order is preserved.
+    Max encoded value ≈ 6.8M, well within int32 range.
+    """
+    if isinstance(rank, int):
+        return rank
+    enc = 0
+    for v in rank:
+        enc = enc * 15 + v
+    pad = 6 - len(rank)
+    for _ in range(pad):
+        enc *= 15
+    return enc
+
+
+def _build_board_presence(runout_card_sets, n_boards):
+    """Return (52, n_boards) bool matrix: True where card appears in that board's runout."""
+    mat = np.zeros((52, n_boards), dtype=bool)
+    for b, cset in enumerate(runout_card_sets):
+        for card in cset:
+            mat[_card_to_idx(card), b] = True
+    return mat
+
+
+def _build_villain_np(sampled_range, villain_ranks, villain_card_sets,
+                      board_presence, n_boards):
+    """Build numpy arrays for one villain's range.
+
+    Returns:
+        rank_mat   (n_combos, n_boards) int32 — _INT_SENTINEL where invalid
+        valid_mat  (n_combos, n_boards) bool  — True where rank is usable
+        coll_mat   (n_combos, n_boards) bool  — True where villain card in runout
+        combo_to_idx  dict combo→row index
+    """
+    n = len(sampled_range)
+    rank_mat = np.full((n, n_boards), _INT_SENTINEL, dtype=np.int32)
+    valid_mat = np.zeros((n, n_boards), dtype=bool)
+    coll_mat = np.zeros((n, n_boards), dtype=bool)
+    combo_to_idx = {}
+
+    for i, combo in enumerate(sampled_range):
+        combo_to_idx[combo] = i
+        ranks_list = villain_ranks.get(combo)
+        if ranks_list is None:
+            continue
+        for b, r in enumerate(ranks_list):
+            if r is not None:
+                rank_mat[i, b] = _rank_to_int32(r)
+                valid_mat[i, b] = True
+
+        card_set = villain_card_sets.get(combo, set())
+        if card_set:
+            cidxs = [_card_to_idx(c) for c in card_set]
+            coll_mat[i] = np.any(board_presence[cidxs], axis=0)
+
+    return rank_mat, valid_mat, coll_mat, combo_to_idx
+
+
+def _vectorized_equities(tuples, hero_arr, hero_valid, villain_np_data):
+    """Compute equity for every tuple at once using NumPy broadcasting.
+
+    villain_np_data: list of (rank_mat, valid_mat, coll_mat, combo_to_idx)
+    Returns list of float equities (invalid tuples silently dropped).
+    """
+    n_tuples = len(tuples)
+    n_boards = len(hero_arr)
+
+    # Start with hero validity broadcast across all tuples.
+    combined_valid = np.broadcast_to(hero_valid, (n_tuples, n_boards)).copy()
+    max_v_ranks = None
+
+    for v_idx, (rank_mat, valid_mat, coll_mat, combo_to_idx) in enumerate(villain_np_data):
+        raw_indices = np.array(
+            [combo_to_idx.get(tup[v_idx], -1) for tup in tuples], dtype=np.int32
+        )
+        has_combo = raw_indices >= 0
+        safe_idx = np.where(has_combo, raw_indices, 0)
+
+        v_ranks = rank_mat[safe_idx]    # (n_tuples, n_boards)
+        v_valid = valid_mat[safe_idx]   # (n_tuples, n_boards)
+        v_coll  = coll_mat[safe_idx]    # (n_tuples, n_boards)
+
+        # Rows whose combo was missing are entirely invalid.
+        missing = ~has_combo[:, np.newaxis]
+        v_valid = v_valid & ~missing
+        v_coll  = v_coll  | missing
+
+        combined_valid &= v_valid & ~v_coll
+
+        if max_v_ranks is None:
+            max_v_ranks = v_ranks.copy()
+        else:
+            np.maximum(max_v_ranks, v_ranks, out=max_v_ranks)
+
+    if max_v_ranks is None:
+        return []
+
+    hero_row = hero_arr[np.newaxis, :]                          # (1, n_boards)
+    wins   = np.sum((hero_row > max_v_ranks) & combined_valid, axis=1)
+    ties   = np.sum((hero_row == max_v_ranks) & combined_valid, axis=1)
+    totals = np.sum(combined_valid, axis=1)
+
+    mask = totals > 0
+    eq = np.where(mask, (wins + ties * 0.5) / np.where(mask, totals.astype(float), 1.0), np.nan)
+    return eq[mask].tolist()
+
+
+# ---------------------------------------------------------------------------
+# Result cache
+# ---------------------------------------------------------------------------
+
+_equity_cache: dict = {}
+_equity_cache_lock = threading.Lock()
+_EQUITY_CACHE_MAX = 64
+
+
+def _equity_cache_key(hero, villain_combos_list, board, game_type, precision):
+    hero_key = frozenset(tuple(c) for c in hero)
+    board_key = frozenset(tuple(c) for c in board)
+    villains_key = tuple(frozenset(combos) for combos in villain_combos_list)
+    return (hero_key, board_key, villains_key, game_type, precision)
+
+
 def calculate_equity_vs_ranges_multiway(
     hero,
     villain_combos_list,
@@ -420,6 +563,13 @@ def calculate_equity_vs_ranges_multiway(
     """
     board = list(board) if board else []
     hero = list(hero)
+
+    # Cache check — same inputs always produce the same result.
+    cache_key = _equity_cache_key(hero, villain_combos_list, board, game_type, precision)
+    with _equity_cache_lock:
+        if cache_key in _equity_cache:
+            return _equity_cache[cache_key]
+
     rng = random.Random(seed)
 
     # Drop empty villain ranges entirely.
@@ -539,22 +689,32 @@ def calculate_equity_vs_ranges_multiway(
     if any(not vr for vr in sampled_villain_ranges):
         raise ValueError("A villain range had no evaluable combos")
 
+    # Build numpy arrays for vectorised equity computation.
+    board_presence = _build_board_presence(runout_card_sets, len(precomputed_boards))
+    villain_np_data = [
+        _build_villain_np(
+            sampled_villain_ranges[v],
+            villain_ranks_per_villain[v],
+            villain_card_sets_per_villain[v],
+            board_presence,
+            len(precomputed_boards),
+        )
+        for v in range(n_villains)
+    ]
+    hero_arr = np.array(
+        [_rank_to_int32(r) if r is not None else _INT_SENTINEL for r in hero_ranks],
+        dtype=np.int32,
+    )
+    hero_valid = np.array([r is not None for r in hero_ranks], dtype=bool)
+
     # Sample tuples from the cartesian product (with collision filter).
     tuple_cap = tuple_cap_for(game_type, precision)
     tuples = _sample_tuples(sampled_villain_ranges, tuple_cap, rng)
     if not tuples:
         raise ValueError("No valid villain tuples could be sampled (all blocked?)")
 
-    # Per-tuple equity. Lookup-based, runs in main process — IPC cost of
-    # shipping 10MB+ rank tables to workers exceeds the savings.
-    equities = []
-    for tup in tuples:
-        eq = _tuple_equity(
-            tup, hero_ranks, runout_card_sets,
-            villain_ranks_per_villain, villain_card_sets_per_villain,
-        )
-        if eq is not None:
-            equities.append(eq)
+    # Vectorised equity: all tuples evaluated at once via NumPy broadcasting.
+    equities = _vectorized_equities(tuples, hero_arr, hero_valid, villain_np_data)
 
     if not equities:
         raise ValueError("No valid curve points could be computed (all combos blocked?)")
@@ -588,7 +748,7 @@ def calculate_equity_vs_ranges_multiway(
         "std_dev":     round(std_dev, 4),
     }
 
-    return {
+    result = {
         "equity_curve": curve,
         "histogram": histogram,
         "summary": summary,
@@ -598,3 +758,11 @@ def calculate_equity_vs_ranges_multiway(
         "tuple_cap": tuple_cap,
         "per_villain_cap": per_villain_cap,
     }
+
+    # Store in cache (LRU: evict oldest entry when full).
+    with _equity_cache_lock:
+        if len(_equity_cache) >= _EQUITY_CACHE_MAX:
+            _equity_cache.pop(next(iter(_equity_cache)))
+        _equity_cache[cache_key] = result
+
+    return result
