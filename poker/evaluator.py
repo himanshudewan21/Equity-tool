@@ -255,3 +255,34 @@ def best_hand(hole_cards, board_cards, game_type):
     if game_type in ("plo4", "plo5"):
         return best_of_omaha(hole_cards, board_cards)
     raise ValueError(f"Unknown game_type: {game_type!r}")
+
+
+def best_hand_rank(hole_cards, board_cards, game_type):
+    """Fast comparable rank for the equity engine (higher int/tuple = better).
+
+    Returns a negated phevaluator int for PLO (C extension, ~10-60x faster
+    than the tuple path) and a rank tuple for NLH. Both are consistent within
+    a game type so max() / == comparisons work correctly across players.
+    Only use this inside the equity engine — external callers wanting hand
+    category info should use best_hand / best_of_omaha instead.
+    """
+    if game_type == "nlhe":
+        return best_of_7(list(hole_cards) + list(board_cards))
+    if game_type not in ("plo4", "plo5"):
+        raise ValueError(f"Unknown game_type: {game_type!r}")
+    if len(board_cards) < 3:
+        raise ValueError("PLO requires at least 3 board cards")
+    # PLO4 + river: single native call.
+    if len(hole_cards) == 4 and len(board_cards) == 5:
+        return -_phe_omaha(*(_PHE_INT[c] for c in board_cards),
+                           *(_PHE_INT[c] for c in hole_cards))
+    # PLO5 or PLO4 on flop/turn: enumerate (2 hole) × (3 board).
+    hole_phe = [_PHE_INT[c] for c in hole_cards]
+    board_phe = [_PHE_INT[c] for c in board_cards]
+    best = 7463
+    for hc in combinations(hole_phe, 2):
+        for bc in combinations(board_phe, 3):
+            r = _phe_eval5(*hc, *bc)
+            if r < best:
+                best = r
+    return -best

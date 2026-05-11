@@ -5,7 +5,7 @@ from concurrent.futures import ProcessPoolExecutor
 from itertools import combinations
 
 from .cards import parse_cards, card_str, remaining_deck, CardError
-from .evaluator import best_hand
+from .evaluator import best_hand, best_hand_rank
 
 
 # Process pool spawn cost is ~hundreds of ms on macOS, so only parallelise
@@ -119,7 +119,7 @@ def calculate_equity_multiway_mc(hero, villains, board, game_type, samples=10000
 
     for _ in range(samples):
         full_board = board + (rng.sample(stub, needed) if needed else [])
-        ranks = [best_hand(h, full_board, game_type) for h in all_hands]
+        ranks = [best_hand_rank(h, full_board, game_type) for h in all_hands]
         max_rank = max(ranks)
         winners = [i for i, r in enumerate(ranks) if r == max_rank]
         for i in range(n):
@@ -178,7 +178,7 @@ def calculate_equity_multiway_exact(hero, villains, board, game_type):
 
     for extra in combinations(stub, needed):
         full_board = board + list(extra)
-        ranks = [best_hand(h, full_board, game_type) for h in all_hands]
+        ranks = [best_hand_rank(h, full_board, game_type) for h in all_hands]
         max_rank = max(ranks)
         winners = [i for i, r in enumerate(ranks) if r == max_rank]
         for i in range(n):
@@ -265,7 +265,7 @@ def _chunk_ranks(args):
         ranks = []
         for fb in boards_list:
             try:
-                ranks.append(best_hand(villain_hand, fb, game_type))
+                ranks.append(best_hand_rank(villain_hand, fb, game_type))
             except Exception:
                 ranks.append(None)
         out.append((combo, ranks))
@@ -298,7 +298,7 @@ def _compute_villain_ranks(vrange, game_type, boards_list, use_mp, pool):
         ranks = []
         for fb in boards_list:
             try:
-                ranks.append(best_hand(villain_hand, fb, game_type))
+                ranks.append(best_hand_rank(villain_hand, fb, game_type))
             except Exception:
                 ranks.append(None)
         result[combo] = ranks
@@ -472,7 +472,7 @@ def calculate_equity_vs_ranges_multiway(
     hero_ranks = []
     for fb in precomputed_boards:
         try:
-            hero_ranks.append(best_hand(hero, fb, game_type))
+            hero_ranks.append(best_hand_rank(hero, fb, game_type))
         except Exception:
             hero_ranks.append(None)
 
