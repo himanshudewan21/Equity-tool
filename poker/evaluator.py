@@ -230,33 +230,17 @@ def best_of_7(cards):
 def best_of_omaha(hole_cards, board_cards):
     """PLO evaluation: exactly 2 from hole cards + exactly 3 from board cards.
 
-    Backed by phevaluator (C extension):
-      - PLO4 with a 5-card board uses native evaluate_omaha_cards in one call.
-      - All other shapes (PLO5, or PLO4 on flop/turn) loop over the inner
-        sub-hands but each rank_5 is a fast C lookup.
-
-    Returns an integer where higher = better (negated phe rank), comparable
-    with > / == like the legacy tuple form. Distinct hand strengths produce
-    distinct ints, so equality still means a true tie.
+    Returns the same tuple form as rank_5 (comparable with > / <).
     """
     if len(board_cards) < 3:
         raise ValueError("PLO requires at least 3 board cards")
-
-    # Fast path: PLO4 + river — single native batch evaluation.
-    if len(hole_cards) == 4 and len(board_cards) == 5:
-        return -_phe_omaha(*(_PHE_INT[c] for c in board_cards),
-                           *(_PHE_INT[c] for c in hole_cards))
-
-    # General path: enumerate (2 hole) × (3 board) sub-hands, take best.
-    hole_phe = [_PHE_INT[c] for c in hole_cards]
-    board_phe = [_PHE_INT[c] for c in board_cards]
-    best = 7463  # phe ranks are 1..7462; 7463 is "worse than worst"
-    for hc in combinations(hole_phe, 2):
-        for bc in combinations(board_phe, 3):
-            r = _phe_eval5(*hc, *bc)
-            if r < best:
+    best = None
+    for hc in combinations(hole_cards, 2):
+        for bc in combinations(board_cards, 3):
+            r = rank_5(list(hc) + list(bc))
+            if best is None or r > best:
                 best = r
-    return -best
+    return best
 
 
 def best_hand(hole_cards, board_cards, game_type):

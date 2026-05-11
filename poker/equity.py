@@ -402,6 +402,8 @@ def calculate_equity_vs_ranges_multiway(
     n_runouts=5000,
     precision=DEFAULT_PRECISION,
     seed=None,
+    samples_per_point=None,
+    curve_points=None,
 ):
     """Multi-way equity curve: hero vs n villains each drawing from a range.
 
@@ -448,16 +450,20 @@ def calculate_equity_vs_ranges_multiway(
         precomputed_boards = [list(board)]
     elif needed == 1:
         precomputed_boards = [board + [c] for c in stub]
-    else:  # needed == 2 (flop)
-        max_unique = len(stub) * (len(stub) - 1) // 2
+    else:  # needed >= 2 (flop or preflop)
+        # For flop (needed==2), compute exact unique count; for preflop force MC.
+        if needed == 2:
+            max_unique = len(stub) * (len(stub) - 1) // 2
+        else:
+            max_unique = float("inf")
         if n_runouts >= max_unique:
-            precomputed_boards = [board + list(extra) for extra in combinations(stub, 2)]
+            precomputed_boards = [board + list(extra) for extra in combinations(stub, needed)]
         else:
             runouts_mode = "mc"
             precomputed_boards = []
             for _ in range(n_runouts):
                 try:
-                    extra = rng.sample(stub, 2)
+                    extra = rng.sample(stub, needed)
                     precomputed_boards.append(board + extra)
                 except ValueError:
                     break
@@ -522,6 +528,16 @@ def calculate_equity_vs_ranges_multiway(
             except CardError:
                 pass
         villain_card_sets_per_villain.append(sets)
+
+    # Drop villain combos that share any card with the hero (physically impossible).
+    hero_card_set = {tuple(c) for c in hero}
+    sampled_villain_ranges = [
+        [c for c in vr
+         if not (villain_card_sets_per_villain[v].get(c, set()) & hero_card_set)]
+        for v, vr in enumerate(sampled_villain_ranges)
+    ]
+    if any(not vr for vr in sampled_villain_ranges):
+        raise ValueError("A villain range had no evaluable combos")
 
     # Sample tuples from the cartesian product (with collision filter).
     tuple_cap = tuple_cap_for(game_type, precision)
