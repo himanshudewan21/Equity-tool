@@ -42,7 +42,7 @@ PRECISION_RUNOUTS = {
 PRECISION_RUNOUTS_PREFLOP = {
     "fast":     {"nlhe": 200,   "plo4": 200,   "plo5": 200},
     "balanced": {"nlhe": 1000,  "plo4": 2000,  "plo5": 500},
-    "precise":  {"nlhe": 5000,  "plo4": 10000, "plo5": 1000},
+    "precise":  {"nlhe": 5000,  "plo4": 10000, "plo5": 500},
 }
 
 # Per-villain rank-precompute cap. PLO4/5 reduced vs NLHE because each
