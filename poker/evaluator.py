@@ -267,7 +267,8 @@ def best_hand_rank(hole_cards, board_cards, game_type):
     category info should use best_hand / best_of_omaha instead.
     """
     if game_type == "nlhe":
-        return best_of_7(list(hole_cards) + list(board_cards))
+        all_phe = [_PHE_INT[c] for c in list(hole_cards) + list(board_cards)]
+        return -_phe_eval5(*all_phe)  # handles 5-7 cards; lower phe rank = better hand
     if game_type not in ("plo4", "plo5"):
         raise ValueError(f"Unknown game_type: {game_type!r}")
     if len(board_cards) < 3:

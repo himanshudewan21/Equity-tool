@@ -29,7 +29,20 @@ _MP_WORKERS = _MP_WORKERS_ENV if _MP_WORKERS_ENV > 0 else max(1, (os.cpu_count()
 PRECISION_RUNOUTS = {
     "fast":     {"nlhe": 200,   "plo4": 100,   "plo5": 100},
     "balanced": {"nlhe": 1000,  "plo4": 50000, "plo5": 50000},
-    "precise":  {"nlhe": 50000, "plo4": 50000, "plo5": 5000},
+    "precise":  {"nlhe": 50000, "plo4": 50000, "plo5": 50000},
+}
+
+# Preflop-specific runout caps.  Preflop (needed=5) requires MC sampling
+# without any exact-enumeration shortcut, so cost scales directly with
+# n_runouts × per_villain_cap.  These caps keep every combination inside
+# Render's 120 s wall-clock limit (Render ≈ 3-5× slower than a local Mac).
+#   NLHE precise:  5000 × 1326 × ~2.7 µs ≈ 18 s local → ~54-90 s on Render
+#   PLO4 precise: 10000 × 1000 × ~0.5 µs ≈  5 s local → ~15-25 s on Render
+#   PLO5 precise:  1000 ×  200 × ~30 µs  ≈  6 s local → ~18-30 s on Render
+PRECISION_RUNOUTS_PREFLOP = {
+    "fast":     {"nlhe": 200,   "plo4": 200,   "plo5": 200},
+    "balanced": {"nlhe": 1000,  "plo4": 2000,  "plo5": 500},
+    "precise":  {"nlhe": 5000,  "plo4": 10000, "plo5": 1000},
 }
 
 # Per-villain rank-precompute cap. PLO4/5 reduced vs NLHE because each
@@ -57,6 +70,12 @@ DEFAULT_PRECISION = "balanced"
 def runouts_for(game_type: str, precision: str = DEFAULT_PRECISION) -> int:
     """Map a precision label to a per-game runout count."""
     table = PRECISION_RUNOUTS.get(precision) or PRECISION_RUNOUTS[DEFAULT_PRECISION]
+    return table[game_type]
+
+
+def preflop_runouts_for(game_type: str, precision: str = DEFAULT_PRECISION) -> int:
+    """Runout cap specifically for preflop (no board cards), kept within server timeout."""
+    table = PRECISION_RUNOUTS_PREFLOP.get(precision) or PRECISION_RUNOUTS_PREFLOP[DEFAULT_PRECISION]
     return table[game_type]
 
 
@@ -592,6 +611,12 @@ def calculate_equity_vs_ranges_multiway(
     needed = 5 - len(board)
     if needed < 0:
         raise ValueError("Board has more than 5 cards")
+
+    # Preflop (needed==5): cap n_runouts to the tighter preflop table so that
+    # n_runouts × per_villain_cap stays within server timeout on Render.
+    if needed == 5:
+        n_runouts = min(n_runouts, preflop_runouts_for(game_type, precision))
+
     stub = remaining_deck(hero + board)
 
     runouts_mode = "exact"
