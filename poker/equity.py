@@ -39,7 +39,7 @@ PRECISION_RUNOUTS = {
 PER_VILLAIN_CAPS = {
     "fast":     {"nlhe": 200, "plo4": 75,  "plo5": 50},
     "balanced": {"nlhe": 300, "plo4": 150, "plo5": 100},
-    "precise":  {"nlhe": 500, "plo4": 500, "plo5": 200},
+    "precise":  {"nlhe": 500, "plo4": 1000, "plo5": 200},
 }
 
 # Total tuple cap for the (v1, v2, ..., vn) cartesian-product sampling.
