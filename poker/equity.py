@@ -23,13 +23,12 @@ _MP_WORKERS = _MP_WORKERS_ENV if _MP_WORKERS_ENV > 0 else max(1, (os.cpu_count()
 
 
 # Range-equity sample counts per precision level and game type.
-# Each tier is genuinely distinct: max unique runouts on the flop are
-# ~1081 (NLHE), ~903 (PLO4), ~861 (PLO5), so Balanced stays under those
-# caps and Precise auto-falls to exact enumeration. PLO5 numbers are
-# scaled because each evaluation is ~12× slower than NLHE.
+# n_runouts >= max unique flop runouts triggers exact enumeration.
+# Max unique flop runouts: ~1081 (NLHE), ~990 (PLO4), ~946 (PLO5).
+# Balanced now uses 50000 for PLO4/5 so it also does exact enumeration.
 PRECISION_RUNOUTS = {
     "fast":     {"nlhe": 200,   "plo4": 100,   "plo5": 100},
-    "balanced": {"nlhe": 1000,  "plo4": 300,   "plo5": 250},
+    "balanced": {"nlhe": 1000,  "plo4": 50000, "plo5": 50000},
     "precise":  {"nlhe": 50000, "plo4": 50000, "plo5": 5000},
 }
 
